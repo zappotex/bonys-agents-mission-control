@@ -8,9 +8,11 @@ import { parse } from 'yaml'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '..')
 const port = Number(process.env.MISSION_CONTROL_API_PORT || 8788)
-const host = process.env.MISSION_CONTROL_API_HOST || '0.0.0.0'
+const host = process.env.MISSION_CONTROL_API_HOST || '127.0.0.1'
 const activeProfileFile = process.env.MISSION_CONTROL_PROFILE || 'bonys-agents.example.yaml'
 const showPrivateValues = process.env.MISSION_CONTROL_SHOW_PRIVATE === 'true'
+// Optionaler Datenordner (im Container ein Volume): eigene Profile in <data>/profiles
+const dataDir = process.env.MISSION_CONTROL_DATA_DIR ? path.resolve(process.env.MISSION_CONTROL_DATA_DIR) : ''
 
 const jsonHeaders = {
   'content-type': 'application/json; charset=utf-8',
@@ -25,6 +27,7 @@ createServer(async (request, response) => {
       return sendJson(response, 200, {
         ok: true,
         service: 'bonys-agents-mission-control-api',
+        version: readPackageVersion(),
         activeProfile: activeProfileFile,
         privateValuesVisible: showPrivateValues,
       })
@@ -46,10 +49,9 @@ createServer(async (request, response) => {
 
     return sendJson(response, 404, { error: 'not_found' })
   } catch (error) {
-    return sendJson(response, 500, {
-      error: 'internal_error',
-      message: error instanceof Error ? error.message : String(error),
-    })
+    // Details nur ins Log, nicht an den Client (keine Pfade nach außen)
+    console.error(error)
+    return sendJson(response, 500, { error: 'internal_error' })
   }
 }).listen(port, host, () => {
   console.log(`Bonys Agents Mission Control API listening on http://${host}:${port}`)
@@ -57,8 +59,7 @@ createServer(async (request, response) => {
 
 async function buildBootstrap(profileName) {
   const agentsConfig = await readYaml(path.join(rootDir, 'config', 'agents.yaml'))
-  const profilePath = path.join(rootDir, 'profiles', profileName)
-  const profile = await readYaml(profilePath)
+  const profile = await readYaml(profilePath(profileName))
   const profileMeta = profileMetaFromFile(profileName, profile)
 
   return {
@@ -113,15 +114,35 @@ function buildAgents(agentsConfig, profile) {
   return [ownerAgent, ...configuredAgents]
 }
 
+function profileDirs() {
+  const dirs = [path.join(rootDir, 'profiles')]
+  if (dataDir) {
+    dirs.push(path.join(dataDir, 'profiles'))
+  }
+  return dirs
+}
+
+// Profile im Datenordner haben Vorrang vor gleichnamigen mitgelieferten Profilen
+function profilePath(file) {
+  const found = profileDirs().reverse().map((dir) => path.join(dir, file)).find((candidate) => existsSync(candidate))
+  return found || path.join(rootDir, 'profiles', file)
+}
+
 async function listProfiles() {
-  const profilesDir = path.join(rootDir, 'profiles')
-  const files = await readdir(profilesDir)
-  const yamlFiles = files.filter((file) => file.endsWith('.yaml') || file.endsWith('.yml'))
+  const files = new Set()
+  for (const dir of profileDirs()) {
+    if (existsSync(dir)) {
+      for (const file of await readdir(dir)) {
+        files.add(file)
+      }
+    }
+  }
+  const yamlFiles = [...files].filter((file) => file.endsWith('.yaml') || file.endsWith('.yml'))
   const visibleFiles = showPrivateValues ? yamlFiles : yamlFiles.filter((file) => !file.endsWith('.local.yaml'))
 
   return Promise.all(
     visibleFiles.sort().map(async (file) => {
-      const data = await readYaml(path.join(profilesDir, file))
+      const data = await readYaml(profilePath(file))
       return profileMetaFromFile(file, data)
     }),
   )

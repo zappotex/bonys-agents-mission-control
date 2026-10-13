@@ -1,12 +1,17 @@
+# Entwicklung: baut das Image aus dem Quellcode.
+# Installation auf Agent-PCs nutzt stattdessen deploy/compose.yaml (fertiges Image aus GHCR).
 services:
   mission-control:
     build: .
     container_name: bonys-agents-mission-control
     ports:
-      - "8787:8787"
+      - "127.0.0.1:8787:8787"
     environment:
-      MISSION_CONTROL_API_PORT: "8787"
-      MISSION_CONTROL_API_HOST: "0.0.0.0"
       MISSION_CONTROL_PROFILE: "bonys-agents.example.yaml"
       MISSION_CONTROL_SHOW_PRIVATE: "false"
+    volumes:
+      - data:/app/data
     restart: unless-stopped
+
+volumes:
+  data:

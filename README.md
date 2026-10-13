@@ -2,7 +2,7 @@
 
 Open-Source-Dashboard („Mission Control“) für frei konfigurierbare Agenten-Teams.
 
-> **Stand:** frühe Entwicklungsversion 0.5.0 – lauffähiges Grundgerüst, noch kein fertiges Produkt.
+> **Stand:** frühe Entwicklungsversion 0.1.0 – lauffähiges Grundgerüst, noch kein fertiges Produkt.
 
 ## Was ist Mission Control?
 
@@ -29,12 +29,57 @@ Die Projekte teilen Herkunft und Stil, hängen technisch aber nicht voneinander 
 - Mission Board (Oberfläche vorhanden, Inhalte noch statisch)
 - Setup-Wizard mit Live-YAML-Vorschau, Kopieren und Herunterladen
 - Private Werte aus `*.local.yaml`-Profilen werden standardmäßig geschwärzt
-- Dockerfile und `docker-compose.yml`
+- Docker-Image für amd64 und arm64, Installation auf Agent-PCs per Skript (siehe unten)
 
 **Noch nicht:** Profilauswahl im Frontend, Profile auf dem Server speichern, Hermes-Peer-Status,
-Obsidian-/Projektindex, dauerhaft gespeicherte Missionen, Tests. Siehe [docs/plan.md](docs/plan.md).
+Obsidian-/Projektindex, dauerhaft gespeicherte Missionen. Siehe [docs/plan.md](docs/plan.md).
 
-## Voraussetzungen
+## Installation mit Bony's Agents
+
+[Bony's Agents](https://github.com/zappotex/BonysAgents) installiert Mission Control automatisch in
+Agent-PCs (Debian 13, amd64 und arm64) – beim Erstellen oder nachträglich. Dabei läuft im Agent-PC als root:
+
+```bash
+curl -fsSLo /tmp/mc-install.sh \
+  https://github.com/zappotex/bonys-agents-mission-control/releases/download/v0.1.0/install.sh
+bash /tmp/mc-install.sh --version 0.1.0 --user agent --install-deps
+```
+
+Ergebnis: Mission Control läuft als Docker-Container unter **http://127.0.0.1:8787/** (nur lokal), startet
+mit dem System (`bonys-mission-control.service`) und hat die Desktop-Verknüpfung **„Mission Control“**,
+die die Oberfläche im Standardbrowser (Brave) öffnet. Geheimnisse werden beim ersten Start zufällig erzeugt.
+
+Update, Deinstallation, Vorlagen und alle Optionen: **[docs/installation-agent-pc.md](docs/installation-agent-pc.md)**.
+Mindestanforderungen maschinenlesbar: [`agentpc.json`](agentpc.json).
+
+## Manuelle Installation
+
+Auf einem eigenen Debian-/Ubuntu-Rechner mit systemd:
+
+```bash
+curl -fsSLO https://github.com/zappotex/bonys-agents-mission-control/releases/download/v0.1.0/install.sh
+curl -fsSLO https://github.com/zappotex/bonys-agents-mission-control/releases/download/v0.1.0/SHA256SUMS
+grep ' install.sh$' SHA256SUMS | sha256sum -c -
+sudo bash install.sh --version 0.1.0 --install-deps          # --user NAME für die Desktop-Verknüpfung
+```
+
+Ohne `--install-deps` bricht das Skript ab, wenn Docker oder das Compose-Plugin fehlen (Exit-Code 2).
+Danach im Browser `http://127.0.0.1:8787/` öffnen.
+
+```bash
+sudo /opt/bonys-mission-control/scripts/update.sh --version latest   # aktualisieren, Daten bleiben
+sudo /opt/bonys-mission-control/scripts/uninstall.sh                 # entfernen, Daten bleiben
+sudo /opt/bonys-mission-control/scripts/uninstall.sh --purge         # alles entfernen
+```
+
+Ganz ohne Skript geht es mit `deploy/compose.yaml` und einer `.env` (aus `.env.example`, Geheimnisse
+selbst setzen, z. B. mit `openssl rand -hex 32`):
+
+```bash
+docker compose -f deploy/compose.yaml --project-directory . --env-file .env up -d
+```
+
+## Voraussetzungen (Entwicklung)
 
 - Node.js **20.19+** oder **22.12+** (wegen Vite 8)
 - optional Docker mit Compose
@@ -52,6 +97,8 @@ npm run dev -- --host 0.0.0.0  # Frontend, leitet /api an das Backend weiter
 ```bash
 npm run build
 npm run lint
+npm test
+tests/agentpc/run.sh           # Installationstest in frischem Debian 13 (braucht Docker)
 MISSION_CONTROL_API_PORT=8790 npm run backend
 ```
 
@@ -63,7 +110,7 @@ Danach liefert `http://127.0.0.1:8790` das gebaute Frontend und `http://127.0.0.
 docker compose up --build
 ```
 
-Danach: `http://localhost:8787`
+Danach: `http://127.0.0.1:8787` (Port nur lokal freigegeben)
 
 ## Konfiguration
 
@@ -79,10 +126,11 @@ Umgebungsvariablen des Backends:
 
 | Variable | Standard | Bedeutung |
 |---|---|---|
-| `MISSION_CONTROL_API_HOST` | `0.0.0.0` | Adresse, auf der das Backend lauscht |
+| `MISSION_CONTROL_API_HOST` | `127.0.0.1` | Adresse, auf der das Backend lauscht (im Container `0.0.0.0`) |
 | `MISSION_CONTROL_API_PORT` | `8788` | Port |
 | `MISSION_CONTROL_PROFILE` | `bonys-agents.example.yaml` | aktives Profil |
 | `MISSION_CONTROL_SHOW_PRIVATE` | `false` | `true` zeigt Werte aus `*.local.yaml` ungeschwärzt |
+| `MISSION_CONTROL_DATA_DIR` | – (im Container `/app/data`) | Datenordner; eigene Profile in `<Datenordner>/profiles/` |
 
 ## Datenschutz
 
@@ -111,10 +159,12 @@ roles, paths and integrations are defined in YAML profiles; Bony's own team ship
 It is a sibling of [Bony's Agents](https://github.com/zappotex/BonysAgents) and
 [Bony's VPN](https://github.com/zappotex/bonys-vpn), but technically independent.
 
-**Status:** early version 0.5.0 – React/Vite/TypeScript frontend, small Node backend reading YAML at
+**Status:** early version 0.1.0 – React/Vite/TypeScript frontend, small Node backend reading YAML at
 runtime, setup wizard, Docker files. Not yet: profile switching, saving profiles, peer status, tests.
 
-**Quick start:** Node.js 20.19+ or 22.12+, then `npm install`, `npm run backend`, `npm run dev`.
-Or `docker compose up --build` and open `http://localhost:8787`.
+**Install (Debian/Ubuntu, amd64/arm64):** download `install.sh` from the latest release and run
+`sudo bash install.sh --version 0.1.0 --install-deps`, then open `http://127.0.0.1:8787/`.
+Details: [docs/installation-agent-pc.md](docs/installation-agent-pc.md).
+**Development:** Node.js 20.19+ or 22.12+, then `npm install`, `npm run backend`, `npm run dev`.
 
 **License:** GPL-3.0-or-later. **YouTube:** [@BonysAgents](https://www.youtube.com/@BonysAgents)

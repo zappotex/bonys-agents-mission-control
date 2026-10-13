@@ -1,0 +1,30 @@
+# Bony's Agents Mission Control – Betrieb auf einem Agent-PC.
+# Liegt nach der Installation in /opt/bonys-mission-control/compose.yaml; Werte kommen aus .env daneben.
+name: bonys-mission-control
+
+services:
+  mission-control:
+    image: ${MISSION_CONTROL_IMAGE:-ghcr.io/zappotex/bonys-agents-mission-control}:${MISSION_CONTROL_VERSION:?MISSION_CONTROL_VERSION fehlt in .env}
+    container_name: bonys-mission-control
+    # Nur lokal erreichbar – nicht ins Netz
+    ports:
+      - "127.0.0.1:${MISSION_CONTROL_PORT:-8787}:8787"
+    environment:
+      MISSION_CONTROL_PROFILE: ${MISSION_CONTROL_PROFILE:-bonys-agents.example.yaml}
+      MISSION_CONTROL_SHOW_PRIVATE: ${MISSION_CONTROL_SHOW_PRIVATE:-false}
+      MISSION_CONTROL_API_TOKEN: ${MISSION_CONTROL_API_TOKEN:?Geheimnis fehlt – scripts/ensure-secrets.sh ausführen}
+    volumes:
+      - data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    restart: unless-stopped
+
+volumes:
+  data:
+    name: bonys-mission-control-data

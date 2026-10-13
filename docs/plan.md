@@ -1,10 +1,20 @@
 # Plan – nächste Schritte
 
-Stand: 2026-10-13, Version 0.5.0. Grundlage ist die [Zusammenfassung](zusammenfassung.md)
+Stand: 2026-10-14, Version 0.1.0 (vorher interner Arbeitsstand 0.5.0). Grundlage ist die [Zusammenfassung](zusammenfassung.md)
 (Abschnitt „Nächster sinnvoller Schritt“). Jede Sitzung soll mit grünem Lint, Typprüfung, Build
 und Tests enden.
 
-## Sitzung 1 – Fundament: Tests, CI, Laufzeit
+## Sitzung A – Installation in Agent-PCs (erledigt, 0.1.0)
+
+- `scripts/install.sh`, `update.sh`, `uninstall.sh`, `reset-secrets.sh`, `ensure-secrets.sh`,
+  `deploy/compose.yaml`, `.env.example`, `agentpc.json`, Doku in `installation-agent-pc.md`.
+- Mehrstufiges Image auf `node:24-alpine`, läuft als `node`, amd64 + arm64, GHCR-Veröffentlichung per Tag.
+- CI: Lint, Typen/Build, Backend-Tests, shellcheck, gitleaks (ganze Historie), Multi-Arch-Build mit
+  arm64-Starttest unter QEMU, Installationstest in Debian 13 mit systemd.
+- Dadurch aus Sitzung 1 schon erledigt: CI, Node-LTS, mehrstufiger Build, Backend standardmäßig an
+  127.0.0.1, Fehlermeldungen ohne Interna, erste Tests.
+
+## Sitzung 1 – Fundament: Tests, CI, Laufzeit (Rest)
 
 - Testrahmen einführen (z. B. Vitest) und das Backend testbar machen
   (Funktionen aus `server/server.mjs` exportieren bzw. in ein Modul auslagern).

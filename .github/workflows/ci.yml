@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Lint, Typen, Build, Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+      - name: shellcheck
+        run: shellcheck -x scripts/*.sh tests/agentpc/run.sh
+      - name: Versionen stimmen überein, Release-Archiv baut
+        run: bash scripts/make-bundle.sh
+
+  gitleaks:
+    name: Geheimnis-Suche (gitleaks, ganze Historie)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          curl -fsSL -o gl.tar.gz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          tar -xzf gl.tar.gz gitleaks
+          ./gitleaks git --redact --no-banner --exit-code 1 .
+          ./gitleaks dir --redact --no-banner --exit-code 1 .
+
+  image:
+    name: Image amd64 + arm64
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Multi-Arch-Build (ohne Veröffentlichung)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: arm64-Image laden
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          load: true
+          tags: mc-test:arm64
+          cache-from: type=gha
+      - name: arm64-Image unter QEMU starten und Healthcheck prüfen
+        run: |
+          docker run -d --name mc-arm64 --platform linux/arm64 -p 127.0.0.1:8787:8787 mc-test:arm64
+          for i in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:8787/api/health && exit 0
+            sleep 2
+          done
+          docker logs mc-arm64
+          exit 1
+
+  agentpc:
+    name: Installation in frischem Debian 13 (systemd)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - run: tests/agentpc/run.sh
