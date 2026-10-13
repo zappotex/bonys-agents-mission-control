@@ -44,7 +44,7 @@ if [ "$PURGE" -eq 1 ]; then
   log "Daten, Einstellungen und Image löschen (--purge)"
   if command -v docker >/dev/null 2>&1; then
     docker volume rm "$MC_VOLUME" >/dev/null 2>&1 || true
-    [ -n "$IMAGE" ] && docker image rm "$IMAGE" >/dev/null 2>&1 || true
+    if [ -n "$IMAGE" ]; then docker image rm "$IMAGE" >/dev/null 2>&1 || true; fi
   fi
   rm -rf "$MC_DIR"
   log "Mission Control vollständig entfernt."

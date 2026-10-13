@@ -54,7 +54,7 @@ step() { STEP=$(( ${STEP:-0} + 1 )); printf '[mission-control] (%d/%d) %s\n' "$S
 [ "$(id -u)" -eq 0 ] || fail 1 "Bitte als root ausführen (z. B. mit sudo)."
 if [ -n "$PORT" ]; then
   case "$PORT" in *[!0-9]*) fail 1 "Ungültiger Port: $PORT" ;; esac
-  [ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ] || fail 1 "Ungültiger Port: $PORT"
+  if [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then fail 1 "Ungültiger Port: $PORT"; fi
 fi
 
 # ---------------------------------------------------------------- 1. System
@@ -64,11 +64,8 @@ case "$(uname -m)" in
   aarch64|arm64) ARCH=arm64 ;;
   *) fail 2 "Nicht unterstützte Architektur: $(uname -m) (nur amd64 und arm64)" ;;
 esac
-OS_ID="unbekannt"
-if [ -r /etc/os-release ]; then
-  # shellcheck disable=SC1091
-  OS_ID="$(. /etc/os-release; echo "${ID:-?}-${VERSION_ID:-?}")"
-fi
+os_field() { sed -n "s/^$1=\"\{0,1\}\([^\"]*\)\"\{0,1\}$/\1/p" /etc/os-release 2>/dev/null; }
+OS_ID="$(os_field ID)-$(os_field VERSION_ID)"
 [ "$OS_ID" = "debian-13" ] || say "Hinweis: getestet für Debian 13, gefunden: $OS_ID"
 say "Architektur $ARCH, System $OS_ID"
 
@@ -151,7 +148,9 @@ else
 fi
 tar -xzf "$BUNDLE" -C "$WORK"
 SRC="$WORK/$NAME"
-[ -f "$SRC/compose.yaml" ] && [ -f "$SRC/scripts/lib.sh" ] || fail 1 "Archiv unvollständig: $(basename "$BUNDLE")"
+if [ ! -f "$SRC/compose.yaml" ] || [ ! -f "$SRC/scripts/lib.sh" ]; then
+  fail 1 "Archiv unvollständig: $(basename "$BUNDLE")"
+fi
 
 # ab hier die gemeinsamen Hilfsfunktionen aus dem Release
 # shellcheck source=lib.sh
