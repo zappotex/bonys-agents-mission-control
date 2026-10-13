@@ -1,0 +1,68 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.env.*
+!.env.example
+config/*.local.yaml
+profiles/*.local.yaml
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Build-Ausgaben und Caches
+build
+coverage
+*.tsbuildinfo
+.vite
+.cache
+
+# Geheimnisse und Schlüssel
+*.key
+*.pem
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+# WireGuard-/VPN-Konfigurationen
+*.conf
+wg*.conf
+secrets/
+
+# Private Notizen und lokale Daten (bleiben nur auf diesem Rechner)
+private/
+notes/
+*.private.md
+Bonys-Agents-Mission-Control-Zusammenfassung.md
+
+# Alter, unvollständig entpackter Projektstand (enthält ein altes .git)
+/Bonys-Agents-Mission-Control/
+
+# Große Binärdateien und Archive
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.7z
+*.mp4
+*.mov
+*.mkv
+*.wav

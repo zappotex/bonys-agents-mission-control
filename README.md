@@ -1,0 +1,120 @@
+# Bony's Agents Mission Control
+
+Open-Source-Dashboard („Mission Control“) für frei konfigurierbare Agenten-Teams.
+
+> **Stand:** frühe Entwicklungsversion 0.5.0 – lauffähiges Grundgerüst, noch kein fertiges Produkt.
+
+## Was ist Mission Control?
+
+Mission Control zeigt ein Agenten-Team auf einen Blick: welche Agenten es gibt, welche Rolle sie haben,
+woran gerade gearbeitet wird. Das Projekt ist **nicht fest auf Bonys Team verdrahtet** – Agenten, Rollen,
+Pfade, Profile und Integrationen kommen aus YAML-Dateien und lassen sich für jedes Team anpassen.
+Bonys Team wird als vorkonfiguriertes Beispielprofil mitgeliefert (`profiles/bonys-agents.example.yaml`).
+
+## Die Bony's-Agents-Familie
+
+Mission Control ist ein eigenständiges Projekt neben:
+
+- **[Bony's Agents](https://github.com/zappotex/BonysAgents)** – virtuelle Agent-PCs mit Brave, Telegram und Hermes Agent
+- **[Bony's VPN](https://github.com/zappotex/bonys-vpn)** – WireGuard-VPN mit Kill-Switch für Debian, Ubuntu und Linux Mint
+
+Die Projekte teilen Herkunft und Stil, hängen technisch aber nicht voneinander ab.
+
+## Was schon funktioniert
+
+- React + Vite + TypeScript-Frontend im Bonys-Agents-Cyberpunk-Look
+- Agenten-Flotte, geladen aus `config/agents.yaml` und dem aktiven Profil
+- Node-Backend, liest die YAML-Dateien zur Laufzeit (`/api/health`, `/api/profiles`, `/api/bootstrap`)
+- Frontend fällt ohne Backend auf veröffentlichungssichere Beispieldaten zurück
+- Mission Board (Oberfläche vorhanden, Inhalte noch statisch)
+- Setup-Wizard mit Live-YAML-Vorschau, Kopieren und Herunterladen
+- Private Werte aus `*.local.yaml`-Profilen werden standardmäßig geschwärzt
+- Dockerfile und `docker-compose.yml`
+
+**Noch nicht:** Profilauswahl im Frontend, Profile auf dem Server speichern, Hermes-Peer-Status,
+Obsidian-/Projektindex, dauerhaft gespeicherte Missionen, Tests. Siehe [docs/plan.md](docs/plan.md).
+
+## Voraussetzungen
+
+- Node.js **20.19+** oder **22.12+** (wegen Vite 8)
+- optional Docker mit Compose
+
+## Entwicklung
+
+```bash
+npm install
+npm run backend                # API auf http://127.0.0.1:8788
+npm run dev -- --host 0.0.0.0  # Frontend, leitet /api an das Backend weiter
+```
+
+## Build prüfen
+
+```bash
+npm run build
+npm run lint
+MISSION_CONTROL_API_PORT=8790 npm run backend
+```
+
+Danach liefert `http://127.0.0.1:8790` das gebaute Frontend und `http://127.0.0.1:8790/api/bootstrap` die Daten.
+
+## Docker
+
+```bash
+docker compose up --build
+```
+
+Danach: `http://localhost:8787`
+
+## Konfiguration
+
+| Datei | Zweck |
+|---|---|
+| `config/app.yaml` | App-Einstellungen und Feature-Schalter |
+| `config/agents.yaml` | Agentenliste |
+| `config/paths.example.yaml` | Beispiel für lokale Pfade |
+| `config/setup-wizard.schema.yaml` | Felder des Setup-Wizards |
+| `profiles/*.yaml` | Teamprofile (`example-team.yaml`, `bonys-agents.example.yaml`) |
+
+Umgebungsvariablen des Backends:
+
+| Variable | Standard | Bedeutung |
+|---|---|---|
+| `MISSION_CONTROL_API_HOST` | `0.0.0.0` | Adresse, auf der das Backend lauscht |
+| `MISSION_CONTROL_API_PORT` | `8788` | Port |
+| `MISSION_CONTROL_PROFILE` | `bonys-agents.example.yaml` | aktives Profil |
+| `MISSION_CONTROL_SHOW_PRIVATE` | `false` | `true` zeigt Werte aus `*.local.yaml` ungeschwärzt |
+
+## Datenschutz
+
+Private Pfade, Peer-Adressen, Tokens und andere Geheimnisse gehören **nicht** ins Repository.
+Eigene Werte kommen in eine Datei `profiles/<name>.local.yaml` – diese ist per `.gitignore` ausgeschlossen.
+Öffentliche Profile verwenden Platzhalter wie `CHANGE_ME_PEER_URL` und `CHANGE_ME_PRIVATE_PATH`.
+
+Der Setup-Wizard schreibt bewusst noch keine Dateien auf den Server, damit private Pfade nicht unbemerkt
+gespeichert oder veröffentlicht werden.
+
+## Lizenz
+
+Freie Software unter der **GNU General Public License, Version 3 oder neuer** (GPL-3.0-or-later),
+wie Bony's Agents – siehe [LICENSE](LICENSE).
+
+## YouTube
+
+Mehr zu Bony's Agents auf YouTube: **[@BonysAgents](https://www.youtube.com/@BonysAgents)**
+
+---
+
+## English (short)
+
+**Bony's Agents Mission Control** is an open-source dashboard for configurable AI-agent teams. Agents,
+roles, paths and integrations are defined in YAML profiles; Bony's own team ships as an example profile.
+It is a sibling of [Bony's Agents](https://github.com/zappotex/BonysAgents) and
+[Bony's VPN](https://github.com/zappotex/bonys-vpn), but technically independent.
+
+**Status:** early version 0.5.0 – React/Vite/TypeScript frontend, small Node backend reading YAML at
+runtime, setup wizard, Docker files. Not yet: profile switching, saving profiles, peer status, tests.
+
+**Quick start:** Node.js 20.19+ or 22.12+, then `npm install`, `npm run backend`, `npm run dev`.
+Or `docker compose up --build` and open `http://localhost:8787`.
+
+**License:** GPL-3.0-or-later. **YouTube:** [@BonysAgents](https://www.youtube.com/@BonysAgents)
