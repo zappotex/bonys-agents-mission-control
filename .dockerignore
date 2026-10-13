@@ -9,3 +9,19 @@ dist
 .vscode
 .idea
 .DS_Store
+
+# Private und lokale Dateien nie ins Image
+**/*.local
+**/*.local.yaml
+**/*.key
+**/*.pem
+**/*.conf
+**/secrets/
+**/private/
+**/notes/
+Bonys-Agents-Mission-Control/
+Bonys-Agents-Mission-Control-Zusammenfassung.md
+**/*.tar
+**/*.tar.gz
+**/*.tgz
+**/*.zip
