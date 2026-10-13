@@ -1,0 +1,42 @@
+fields:
+  - key: teamName
+    label: Teamname
+    type: string
+    required: true
+  - key: ownerName
+    label: Besitzer / Operator
+    type: string
+    required: true
+  - key: coordinatorName
+    label: Koordinator
+    type: string
+    required: true
+  - key: agentNames
+    label: Agenten
+    type: list
+    required: true
+  - key: projectPath
+    label: Projektpfad
+    type: path
+    required: true
+  - key: notesPath
+    label: Notiz-/Obsidian-Pfad
+    type: path
+    required: false
+  - key: outputPath
+    label: Output-/Video-Pfad
+    type: path
+    required: true
+  - key: theme
+    label: Theme
+    type: enum
+    options:
+      - bonys-agents-cyberpunk
+      - default-dark
+      - minimal
+  - key: usesHermesPeers
+    label: Hermes-Peers nutzen
+    type: boolean
+  - key: usesObsidian
+    label: Obsidian/Markdown nutzen
+    type: boolean

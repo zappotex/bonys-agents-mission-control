@@ -1,0 +1,9 @@
+paths:
+  projects: /path/to/projects
+  notes: /path/to/obsidian-or-markdown-vault
+  outputs: /path/to/output-folder
+  videos: /path/to/video-folder
+
+privacy:
+  publish_real_paths: false
+  redact_secrets: true

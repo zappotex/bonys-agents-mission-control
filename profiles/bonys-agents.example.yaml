@@ -1,0 +1,37 @@
+name: Bonys Agents
+slug: bonys-agents
+description: Vorkonfiguriertes Teamprofil für Bony. Öffentliche Version ohne Secrets.
+theme: bonys-agents-cyberpunk
+
+team:
+  owner: Bony
+  coordinator: Phaseone0815
+  agents:
+    - Phaseone0815
+    - Barney
+    - Current
+    - Lily
+
+integrations:
+  hermes:
+    enabled: true
+    peers:
+      - id: phaseone0815
+        label: Local coordinator profile
+      - id: barney
+        label: YouTube Specialist
+        endpoint: CHANGE_ME_PEER_URL
+      - id: current
+        label: Writer Agent
+      - id: lily
+        label: Web Research Agent
+  obsidian:
+    enabled: true
+    path: CHANGE_ME_PRIVATE_PATH
+  video_outputs:
+    enabled: true
+    path: CHANGE_ME_PRIVATE_PATH
+
+privacy:
+  contains_private_values: false
+  publish_safe: true

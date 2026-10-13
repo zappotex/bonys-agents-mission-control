@@ -1,0 +1,13 @@
+app:
+  name: Bonys Agents Mission Control
+  description: Open-source mission control dashboard for configurable agent teams.
+  default_profile: bonys-agents
+  theme: bonys-agents-cyberpunk
+  public_mode: false
+
+features:
+  setup_wizard: true
+  editable_profiles: true
+  hermes_peer_status: planned
+  obsidian_index: planned
+  docker_deployment: planned

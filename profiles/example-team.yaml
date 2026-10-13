@@ -1,0 +1,27 @@
+name: Example Team
+slug: example-team
+description: Neutral example profile for public installs.
+theme: default-dark
+
+team:
+  owner: Your Name
+  coordinator: Coordinator
+  agents:
+    - Coordinator
+    - Researcher
+    - Builder
+
+integrations:
+  hermes:
+    enabled: false
+    peers: []
+  obsidian:
+    enabled: false
+    path: null
+  video_outputs:
+    enabled: false
+    path: null
+
+privacy:
+  contains_private_values: false
+  publish_safe: true
