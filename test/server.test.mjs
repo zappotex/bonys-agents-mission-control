@@ -2,6 +2,7 @@
 import { after, before, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
+import { createServer as createHttpServer } from 'node:http'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -12,6 +13,8 @@ const serverFile = fileURLToPath(new URL('../server/server.mjs', import.meta.url
 const dataDir = mkdtempSync(path.join(tmpdir(), 'mc-test-'))
 let child
 let baseUrl
+let peerServer
+let peerHealthRequests = 0
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -34,6 +37,22 @@ before(async () => {
   writeFileSync(path.join(dataDir, 'profiles', 'eigenes-team.yaml'), 'name: Eigenes Team\nteam:\n  owner: Testerin\n')
   writeFileSync(path.join(dataDir, 'profiles', 'geheim.local.yaml'), 'name: Geheim\nintegrations:\n  token: abc\n')
 
+  peerServer = createHttpServer((request, response) => {
+    if (request.url === '/health') {
+      peerHealthRequests += 1
+      response.writeHead(200, { 'content-type': 'application/json' })
+      response.end('{"status":"ok"}')
+      return
+    }
+    response.writeHead(404).end()
+  })
+  await new Promise((resolve, reject) => {
+    peerServer.once('error', reject)
+    peerServer.listen(0, '127.0.0.1', resolve)
+  })
+  const peerPort = peerServer.address().port
+  writeFileSync(path.join(dataDir, 'peers.yaml'), `peers:\n  barney:\n    endpoint: http://127.0.0.1:${peerPort}\n`)
+
   const port = await freePort()
   baseUrl = `http://127.0.0.1:${port}`
   child = spawn(process.execPath, [serverFile], {
@@ -50,6 +69,7 @@ before(async () => {
 
 after(() => {
   child?.kill()
+  peerServer?.close()
   rmSync(dataDir, { recursive: true, force: true })
 })
 
@@ -72,6 +92,30 @@ test('bootstrap lädt ein Profil aus dem Datenordner', async () => {
   const { status, body } = await getJson('/api/bootstrap?profile=eigenes-team.yaml')
   assert.equal(status, 200)
   assert.equal(body.agents[0].name, 'Testerin')
+})
+
+test('nicht live geprüfte Hermes-Peers werden nicht als beschäftigt erfunden', async () => {
+  const { status, body } = await getJson('/api/bootstrap')
+  const current = body.agents.find((agent) => agent.name === 'Current')
+  assert.equal(status, 200)
+  assert.ok(current)
+  assert.equal(current.status, 'standby')
+})
+
+test('erreichbare Hermes-Peers werden live als online gemeldet, ohne den Endpunkt auszuliefern', async () => {
+  const { status, body } = await getJson('/api/bootstrap')
+  const barney = body.agents.find((agent) => agent.name === 'Barney')
+  assert.equal(status, 200)
+  assert.equal(barney.status, 'online')
+  assert.equal(barney.statusSource, 'live')
+  assert.equal(barney.endpoint, undefined)
+})
+
+test('schnelle Bootstrap-Aufrufe lösen höchstens einen neuen Peer-Healthcheck aus', async () => {
+  const requestsBefore = peerHealthRequests
+  await getJson('/api/bootstrap')
+  await getJson('/api/bootstrap')
+  assert.ok(peerHealthRequests - requestsBefore <= 1)
 })
 
 test('lokale Profile werden ohne Freigabe nicht ausgeliefert', async () => {

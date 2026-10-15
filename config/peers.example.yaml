@@ -1,0 +1,7 @@
+# Private Peer-Adressen gehören in <MISSION_CONTROL_DATA_DIR>/peers.yaml,
+# im Container also /app/data/peers.yaml. Diese Datei ist nur ein Muster.
+# Die Adressen werden für GET /health verwendet und nicht an das Frontend ausgeliefert.
+
+peers:
+  example-agent:
+    endpoint: http://agent.example.internal:8377

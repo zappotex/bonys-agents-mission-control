@@ -13,6 +13,8 @@ const activeProfileFile = process.env.MISSION_CONTROL_PROFILE || 'bonys-agents.e
 const showPrivateValues = process.env.MISSION_CONTROL_SHOW_PRIVATE === 'true'
 // Optionaler Datenordner (im Container ein Volume): eigene Profile in <data>/profiles
 const dataDir = process.env.MISSION_CONTROL_DATA_DIR ? path.resolve(process.env.MISSION_CONTROL_DATA_DIR) : ''
+const peerHealthCache = new Map()
+const peerHealthCacheMs = 5000
 
 const jsonHeaders = {
   'content-type': 'application/json; charset=utf-8',
@@ -70,7 +72,7 @@ async function buildBootstrap(profileName) {
     source: 'backend',
     activeProfile: profileMeta,
     profiles: await listProfiles(),
-    agents: buildAgents(agentsConfig, profile),
+    agents: await buildAgents(agentsConfig, profile),
     privacy: {
       privateValuesVisible: showPrivateValues,
       redaction: showPrivateValues ? 'disabled' : 'private profile values are redacted',
@@ -78,7 +80,7 @@ async function buildBootstrap(profileName) {
   }
 }
 
-function buildAgents(agentsConfig, profile) {
+async function buildAgents(agentsConfig, profile) {
   const owner = profile?.team?.owner || 'Operator'
   const ownerAgent = {
     id: slugify(owner),
@@ -86,32 +88,69 @@ function buildAgents(agentsConfig, profile) {
     role: 'Operator / Creator',
     type: 'human',
     status: 'online',
+    statusSource: 'configured',
     tags: ['strategy', 'approval', 'creative-direction'],
   }
 
-  const defaultStatusById = {
-    coordinator: 'online',
-    youtube: 'busy',
-    writer: 'standby',
-    research: 'standby',
-  }
-
-  const configuredAgents = (agentsConfig?.agents || [])
+  const privatePeers = await readPrivatePeers()
+  const configuredAgents = await Promise.all((agentsConfig?.agents || [])
     .filter((agent) => agent?.enabled !== false)
-    .map((agent, index) => {
+    .map(async (agent, index) => {
       const id = agent.id || `agent-${index + 1}`
+      const endpoint = privatePeers[agent.peer]?.endpoint || normalizePublicValue(agent.endpoint)
+      const liveStatus = agent.type === 'hermes-peer' && endpoint
+        ? await probePeerHealth(endpoint)
+        : undefined
       return {
         id,
         name: agent.name || id,
         role: agent.role || 'Agent',
         type: agent.type || 'placeholder',
-        status: defaultStatusById[id] || 'standby',
-        endpoint: normalizePublicValue(agent.endpoint),
+        status: liveStatus || normalizeAgentStatus(agent.status),
+        statusSource: liveStatus ? 'live' : 'configured',
         tags: Array.isArray(agent.tags) ? agent.tags : [],
       }
-    })
+    }))
 
   return [ownerAgent, ...configuredAgents]
+}
+
+async function readPrivatePeers() {
+  if (!dataDir) return {}
+  const file = path.join(dataDir, 'peers.yaml')
+  if (!existsSync(file)) return {}
+  const parsed = parse(await readFile(file, 'utf8')) || {}
+  return parsed.peers && typeof parsed.peers === 'object' ? parsed.peers : {}
+}
+
+async function probePeerHealth(endpoint) {
+  const cached = peerHealthCache.get(endpoint)
+  if (cached?.expiresAt > Date.now()) return cached.status
+  if (cached?.promise) return cached.promise
+
+  const promise = fetchPeerHealth(endpoint)
+  peerHealthCache.set(endpoint, { promise })
+  const status = await promise
+  peerHealthCache.set(endpoint, { status, expiresAt: Date.now() + peerHealthCacheMs })
+  return status
+}
+
+async function fetchPeerHealth(endpoint) {
+  try {
+    const base = new URL(endpoint)
+    if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password) return 'offline'
+    const healthUrl = new URL('health', base.href.endsWith('/') ? base.href : `${base.href}/`)
+    const response = await fetch(healthUrl, {
+      headers: { accept: 'application/json' },
+      redirect: 'error',
+      signal: AbortSignal.timeout(1500),
+    })
+    if (!response.ok) return 'offline'
+    const body = await response.json()
+    return body?.status === 'ok' ? 'online' : 'offline'
+  } catch {
+    return 'offline'
+  }
 }
 
 function profileDirs() {
@@ -208,6 +247,10 @@ function normalizePublicValue(value) {
   }
 
   return value
+}
+
+function normalizeAgentStatus(value) {
+  return ['online', 'busy', 'standby', 'offline'].includes(value) ? value : 'standby'
 }
 
 function sanitizeProfileName(file) {

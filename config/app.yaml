@@ -8,6 +8,6 @@ app:
 features:
   setup_wizard: true
   editable_profiles: true
-  hermes_peer_status: planned
+  hermes_peer_status: active
   obsidian_index: planned
   docker_deployment: planned

@@ -3,7 +3,6 @@ import {
   Bot,
   CheckCircle2,
   CircleDot,
-  Clock3,
   Copy,
   Cpu,
   Download,
@@ -35,6 +34,7 @@ type Agent = {
   role: string
   type: AgentType
   status: AgentStatus
+  statusSource?: 'live' | 'configured' | 'stale'
   tags: string[]
   endpoint?: string
 }
@@ -44,6 +44,7 @@ type AgentConfig = {
   name?: string
   role?: string
   type?: AgentType
+  status?: AgentStatus
   tags?: string[]
   endpoint?: string
   enabled?: boolean
@@ -72,6 +73,10 @@ type ProfileMeta = {
 }
 
 type BootstrapData = {
+  app?: {
+    name: string
+    version: string
+  }
   source: 'backend' | 'fallback'
   activeProfile: ProfileMeta
   profiles: ProfileMeta[]
@@ -105,13 +110,6 @@ type WizardState = {
 
 const publicAgentsConfig = parse(agentsYaml) as AgentsConfig
 const publicBonysProfile = parse(bonysProfileYaml) as TeamProfile
-
-const defaultStatusById: Record<string, AgentStatus> = {
-  coordinator: 'online',
-  youtube: 'busy',
-  writer: 'standby',
-  research: 'standby',
-}
 
 const fallbackBootstrap: BootstrapData = {
   source: 'fallback',
@@ -187,32 +185,51 @@ function App() {
   const [wizard, setWizard] = useState<WizardState>(defaultWizardState)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
   const [bootstrap, setBootstrap] = useState<BootstrapData>(fallbackBootstrap)
-  const [apiState, setApiState] = useState<'loading' | 'backend' | 'fallback'>('loading')
+  const [apiState, setApiState] = useState<'loading' | 'backend' | 'degraded' | 'fallback'>('loading')
 
   useEffect(() => {
     let isMounted = true
+    let hasBackendData = false
+    let refreshTimer: number | undefined
+    let controller: AbortController | undefined
 
-    fetch('/api/bootstrap')
-      .then((response) => {
+    const loadBootstrap = async () => {
+      controller = new AbortController()
+      try {
+        const response = await fetch('/api/bootstrap', { signal: controller.signal })
         if (!response.ok) {
           throw new Error(`Backend returned ${response.status}`)
         }
-
-        return response.json() as Promise<BootstrapData>
-      })
-      .then((data) => {
+        const data = await response.json() as BootstrapData
         if (!isMounted) return
+        hasBackendData = true
         setBootstrap({ ...data, source: 'backend' })
         setApiState('backend')
-      })
-      .catch(() => {
+      } catch {
         if (!isMounted) return
-        setBootstrap(fallbackBootstrap)
-        setApiState('fallback')
-      })
+        if (!hasBackendData) {
+          setBootstrap(fallbackBootstrap)
+          setApiState('fallback')
+        } else {
+          setBootstrap((current) => ({
+            ...current,
+            agents: current.agents.map((agent) => agent.statusSource === 'live'
+              ? { ...agent, status: 'offline', statusSource: 'stale' }
+              : agent),
+          }))
+          setApiState('degraded')
+        }
+      } finally {
+        if (isMounted) refreshTimer = window.setTimeout(loadBootstrap, 15_000)
+      }
+    }
+
+    loadBootstrap()
 
     return () => {
       isMounted = false
+      controller?.abort()
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
     }
   }, [])
 
@@ -267,14 +284,18 @@ function App() {
         <div className="profile-card">
           <p className="eyebrow">Aktives Profil</p>
           <strong>{activeProfile.file}</strong>
-          <span>{apiState === 'backend' ? 'Live aus Backend-YAML geladen.' : 'Frontend-Fallback aus Example-YAML.'}</span>
+          <span>{apiState === 'backend'
+            ? 'Live aus Backend-YAML geladen.'
+            : apiState === 'degraded'
+              ? 'Letzte API-Daten; Aktualisierung gestört.'
+              : 'Frontend-Fallback aus Example-YAML.'}</span>
         </div>
       </aside>
 
       <section className="workspace">
         <header className="hero-panel">
           <div>
-            <p className="eyebrow">v0.5 Runtime-Backend</p>
+            <p className="eyebrow">v{bootstrap.app?.version || 'Entwicklung'} · Live Peer Status</p>
             <h2>Ein Dashboard für jedes Agenten-Team.</h2>
             <p>
               Nicht hart auf Bony verdrahtet: Agenten, Rollen, Peers, Projektpfade und Themes werden über Profile konfiguriert.
@@ -283,8 +304,12 @@ function App() {
           <div className="hero-grid">
             <Metric icon={<Bot />} label="Agenten" value={agents.length.toString()} />
             <Metric icon={<FolderKanban />} label="Missionen" value={missions.length.toString()} />
-            <Metric icon={<ShieldCheck />} label="Lizenz" value="AGPL" />
-            <Metric icon={<GitBranch />} label="Datenquelle" value={apiState === 'backend' ? 'API' : 'Fallback'} />
+            <Metric icon={<ShieldCheck />} label="Lizenz" value="GPL" />
+            <Metric
+              icon={<GitBranch />}
+              label="Datenquelle"
+              value={apiState === 'backend' ? 'API' : apiState === 'degraded' ? 'API gestört' : 'Fallback'}
+            />
           </div>
         </header>
 
@@ -295,8 +320,15 @@ function App() {
               <article className="agent-card" key={agent.id}>
                 <div className="agent-topline">
                   <div className="agent-avatar">{agent.name.slice(0, 2).toUpperCase()}</div>
-                  <span className={`status-pill ${statusTone[agent.status]}`}>
-                    <CircleDot size={14} /> {agent.status}
+                  <span
+                    className={`status-pill ${statusTone[agent.status]}`}
+                    title={agent.statusSource === 'live'
+                      ? 'Live über den Hermes-Healthcheck geprüft'
+                      : agent.statusSource === 'stale'
+                        ? 'Letzte Live-Prüfung fehlgeschlagen'
+                        : 'Konfigurierter Standardstatus'}
+                  >
+                    <CircleDot size={14} /> {agent.status}{agent.statusSource === 'live' ? ' · live' : agent.statusSource === 'stale' ? ' · stale' : ''}
                   </span>
                 </div>
                 <h3>{agent.name}</h3>
@@ -336,7 +368,7 @@ function App() {
               <li><CheckCircle2 /> Profil-Export v0.3</li>
               <li><CheckCircle2 /> YAML-Konfiguration v0.4</li>
               <li><PlayCircle /> Runtime-Backend v0.5</li>
-              <li><Clock3 /> Hermes-Peer-Status folgt</li>
+              <li><CheckCircle2 /> Hermes-Peer-Erreichbarkeit live</li>
             </ol>
           </div>
         </section>
@@ -404,7 +436,11 @@ function App() {
 
         <section id="status" className="status-strip">
           <Metric icon={<Activity />} label="Frontend" value="läuft" />
-          <Metric icon={<Cpu />} label="Backend" value={apiState === 'backend' ? 'aktiv' : 'Fallback'} />
+          <Metric
+            icon={<Cpu />}
+            label="Backend"
+            value={apiState === 'backend' ? 'aktiv' : apiState === 'degraded' ? 'gestört' : 'Fallback'}
+          />
           <Metric icon={<HardDrive />} label="Profile" value={activeProfile.publishSafe ? 'publish-safe' : 'lokal'} />
           <Metric icon={<ShieldCheck />} label="Private Daten" value={bootstrap.privacy?.privateValuesVisible ? 'sichtbar' : 'redigiert'} />
         </section>
@@ -434,7 +470,7 @@ function buildAgentsFromConfig(config: AgentsConfig, profile: TeamProfile): Agen
         name: agent.name || id,
         role: agent.role || 'Agent',
         type: agent.type || 'placeholder',
-        status: defaultStatusById[id] || 'standby',
+        status: normalizeAgentStatus(agent.status),
         endpoint: normalizeEndpoint(agent.endpoint),
         tags: Array.isArray(agent.tags) ? agent.tags : [],
       }
@@ -449,6 +485,10 @@ function normalizeEndpoint(endpoint?: string) {
   }
 
   return endpoint
+}
+
+function normalizeAgentStatus(status?: AgentStatus): AgentStatus {
+  return status === 'online' || status === 'busy' || status === 'offline' ? status : 'standby'
 }
 
 function copyTextFallback(text: string) {
