@@ -13,6 +13,8 @@ Bonys Team wird als vorkonfiguriertes Beispielprofil mitgeliefert (`profiles/bon
 
 ## Die Bony's-Agents-Familie
 
+![Bony's VPN: Tunnelliste, Details, Autostart und Kill-Switch](docs/images/missioncontrol.png)
+
 Mission Control ist ein eigenständiges Projekt neben:
 
 - **[Bony's Agents](https://github.com/zappotex/BonysAgents)** – virtuelle Agent-PCs mit Brave, Telegram und Hermes Agent
