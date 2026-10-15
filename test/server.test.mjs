@@ -94,6 +94,14 @@ test('bootstrap lädt ein Profil aus dem Datenordner', async () => {
   assert.equal(body.agents[0].name, 'Testerin')
 })
 
+test('das neutrale Beispielprofil verwendet keine Agentennamen aus Bonys Preset', async () => {
+  const { status, body } = await getJson('/api/bootstrap?profile=example-team.yaml')
+  const names = body.agents.map((agent) => agent.name)
+  assert.equal(status, 200)
+  assert.deepEqual(names, ['Your Name', 'Atlas', 'Nova', 'Scribe'])
+  assert.ok(!names.includes('Barney'))
+})
+
 test('nicht live geprüfte Hermes-Peers werden nicht als beschäftigt erfunden', async () => {
   const { status, body } = await getJson('/api/bootstrap')
   const current = body.agents.find((agent) => agent.name === 'Current')

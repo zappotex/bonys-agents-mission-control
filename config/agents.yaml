@@ -1,34 +1,26 @@
+# Neutrale Standardkonfiguration. Bonys eigenes Team liegt ausschließlich
+# im separaten Profil profiles/bonys-agents.example.yaml.
 agents:
   - id: coordinator
-    name: Phaseone0815
-    role: Koordination / Mission Control
+    name: Atlas
+    role: Team Coordination
     type: hermes-peer
-    peer: phaseone0815
-    avatar: /assets/agents/phaseone0815.png
-    tags: [coordination, planning, review, automation]
-    enabled: true
-
-  - id: youtube
-    name: Barney
-    role: YouTube Specialist
-    type: hermes-peer
-    peer: barney
-    endpoint: CHANGE_ME_PEER_URL
-    tags: [youtube, script, publishing]
-    enabled: true
-
-  - id: writer
-    name: Current
-    role: Writer / Story
-    type: hermes-peer
-    peer: current
-    tags: [writing, narration, structure]
+    peer: atlas
+    tags: [coordination, planning, review]
     enabled: true
 
   - id: research
-    name: Lily
-    role: Web Research
+    name: Nova
+    role: Research Specialist
     type: hermes-peer
-    peer: lily
+    peer: nova
     tags: [research, sources, fact-check]
+    enabled: true
+
+  - id: writer
+    name: Scribe
+    role: Writer / Documentation
+    type: hermes-peer
+    peer: scribe
+    tags: [writing, documentation, structure]
     enabled: true

@@ -3,6 +3,37 @@ slug: bonys-agents
 description: Vorkonfiguriertes Teamprofil für Bony. Öffentliche Version ohne Secrets.
 theme: bonys-agents-cyberpunk
 
+agents:
+  - id: coordinator
+    name: Phaseone0815
+    role: Koordination / Mission Control
+    type: hermes-peer
+    peer: phaseone0815
+    avatar: /assets/agents/phaseone0815.png
+    tags: [coordination, planning, review, automation]
+    enabled: true
+  - id: youtube
+    name: Barney
+    role: YouTube Specialist
+    type: hermes-peer
+    peer: barney
+    tags: [youtube, script, publishing]
+    enabled: true
+  - id: writer
+    name: Current
+    role: Writer / Story
+    type: hermes-peer
+    peer: current
+    tags: [writing, narration, structure]
+    enabled: true
+  - id: research
+    name: Lily
+    role: Web Research
+    type: hermes-peer
+    peer: lily
+    tags: [research, sources, fact-check]
+    enabled: true
+
 team:
   owner: Bony
   coordinator: Phaseone0815

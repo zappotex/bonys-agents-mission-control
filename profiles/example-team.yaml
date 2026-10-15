@@ -3,13 +3,36 @@ slug: example-team
 description: Neutral example profile for public installs.
 theme: default-dark
 
+agents:
+  - id: coordinator
+    name: Atlas
+    role: Team Coordination
+    type: hermes-peer
+    peer: atlas
+    tags: [coordination, planning, review]
+    enabled: true
+  - id: research
+    name: Nova
+    role: Research Specialist
+    type: hermes-peer
+    peer: nova
+    tags: [research, sources, fact-check]
+    enabled: true
+  - id: writer
+    name: Scribe
+    role: Writer / Documentation
+    type: hermes-peer
+    peer: scribe
+    tags: [writing, documentation, structure]
+    enabled: true
+
 team:
   owner: Your Name
-  coordinator: Coordinator
+  coordinator: Atlas
   agents:
-    - Coordinator
-    - Researcher
-    - Builder
+    - Atlas
+    - Nova
+    - Scribe
 
 integrations:
   hermes:

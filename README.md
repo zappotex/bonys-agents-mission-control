@@ -120,11 +120,15 @@ Danach: `http://127.0.0.1:8787` (Port nur lokal freigegeben)
 | Datei | Zweck |
 |---|---|
 | `config/app.yaml` | App-Einstellungen und Feature-Schalter |
-| `config/agents.yaml` | Agentenliste |
+| `config/agents.yaml` | neutrale Standard-Agentenliste (`Atlas`, `Nova`, `Scribe`) |
 | `config/peers.example.yaml` | Muster für private Hermes-Peer-Endpunkte |
 | `config/paths.example.yaml` | Beispiel für lokale Pfade |
 | `config/setup-wizard.schema.yaml` | Felder des Setup-Wizards |
 | `profiles/*.yaml` | Teamprofile (`example-team.yaml`, `bonys-agents.example.yaml`) |
+
+Ein Profil kann seine eigene vollständige `agents:`-Liste enthalten. Diese hat Vorrang vor
+`config/agents.yaml`. Dadurch bleibt die allgemeine Beispielkonfiguration neutral, während
+`bonys-agents.example.yaml` Bonys Team als getrenntes, veröffentlichungssicheres Preset mitliefert.
 
 Umgebungsvariablen des Backends:
 

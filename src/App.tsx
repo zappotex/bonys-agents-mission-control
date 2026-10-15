@@ -55,6 +55,7 @@ type AgentsConfig = {
 }
 
 type TeamProfile = {
+  agents?: AgentConfig[]
   team?: {
     owner?: string
     coordinator?: string
@@ -461,7 +462,8 @@ function buildAgentsFromConfig(config: AgentsConfig, profile: TeamProfile): Agen
     tags: ['strategy', 'approval', 'creative-direction'],
   }
 
-  const configuredAgents = (config.agents || [])
+  const configuredAgentSource = Array.isArray(profile.agents) ? profile.agents : config.agents
+  const configuredAgents = (configuredAgentSource || [])
     .filter((agent) => agent.enabled !== false)
     .map((agent, index): Agent => {
       const id = agent.id || `agent-${index + 1}`

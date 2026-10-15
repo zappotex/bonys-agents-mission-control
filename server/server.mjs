@@ -93,7 +93,8 @@ async function buildAgents(agentsConfig, profile) {
   }
 
   const privatePeers = await readPrivatePeers()
-  const configuredAgents = await Promise.all((agentsConfig?.agents || [])
+  const configuredAgentSource = Array.isArray(profile?.agents) ? profile.agents : agentsConfig?.agents
+  const configuredAgents = await Promise.all((configuredAgentSource || [])
     .filter((agent) => agent?.enabled !== false)
     .map(async (agent, index) => {
       const id = agent.id || `agent-${index + 1}`
