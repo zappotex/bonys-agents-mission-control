@@ -26,6 +26,7 @@ Die Projekte teilen Herkunft und Stil, hängen technisch aber nicht voneinander 
 
 - React + Vite + TypeScript-Frontend im Bonys-Agents-Cyberpunk-Look
 - Agenten-Flotte, geladen aus `config/agents.yaml` und dem aktiven Profil
+- Profilwähler im Dashboard; Agenten-Flotte und Setup-Wizard wechseln gemeinsam zwischen den verfügbaren Profilen
 - Node-Backend, liest die YAML-Dateien zur Laufzeit (`/api/health`, `/api/profiles`, `/api/bootstrap`)
 - Live-Erreichbarkeit für Hermes-Peers über deren `/health`-Endpunkt (`online`/`offline`); ohne privaten Endpunkt ehrlich `standby`
 - Frontend fällt ohne Backend auf veröffentlichungssichere Beispieldaten zurück
@@ -34,7 +35,7 @@ Die Projekte teilen Herkunft und Stil, hängen technisch aber nicht voneinander 
 - Private Werte aus `*.local.yaml`-Profilen werden standardmäßig geschwärzt
 - Docker-Image für amd64 und arm64, Installation auf Agent-PCs per Skript (siehe unten)
 
-**Noch nicht:** Profilauswahl im Frontend, Profile auf dem Server speichern, tatsächliche Beschäftigung laufender Hermes-Aufträge,
+**Noch nicht:** Profile auf dem Server speichern, tatsächliche Beschäftigung laufender Hermes-Aufträge,
 Obsidian-/Projektindex, dauerhaft gespeicherte Missionen. Siehe [docs/plan.md](docs/plan.md).
 
 ## Installation mit Bony's Agents

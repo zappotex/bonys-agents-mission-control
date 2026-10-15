@@ -19,7 +19,7 @@ import {
   Users,
   WandSparkles,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { parse } from 'yaml'
 import agentsYaml from '../config/agents.yaml?raw'
 import bonysProfileYaml from '../profiles/bonys-agents.example.yaml?raw'
@@ -187,28 +187,49 @@ function App() {
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
   const [bootstrap, setBootstrap] = useState<BootstrapData>(fallbackBootstrap)
   const [apiState, setApiState] = useState<'loading' | 'backend' | 'degraded' | 'fallback'>('loading')
+  const [selectedProfile, setSelectedProfile] = useState('')
+  const loadedProfileFile = useRef('')
+  const hasBackendData = useRef(false)
+  const confirmedProfileFile = useRef('')
 
   useEffect(() => {
     let isMounted = true
-    let hasBackendData = false
     let refreshTimer: number | undefined
     let controller: AbortController | undefined
 
     const loadBootstrap = async () => {
       controller = new AbortController()
       try {
-        const response = await fetch('/api/bootstrap', { signal: controller.signal })
+        const profileQuery = selectedProfile ? `?profile=${encodeURIComponent(selectedProfile)}` : ''
+        const response = await fetch(`/api/bootstrap${profileQuery}`, { signal: controller.signal })
         if (!response.ok) {
           throw new Error(`Backend returned ${response.status}`)
         }
         const data = await response.json() as BootstrapData
         if (!isMounted) return
-        hasBackendData = true
+        hasBackendData.current = true
+        confirmedProfileFile.current = data.activeProfile.file
         setBootstrap({ ...data, source: 'backend' })
+        if (loadedProfileFile.current !== data.activeProfile.file) {
+          loadedProfileFile.current = data.activeProfile.file
+          const owner = data.agents.find((agent) => agent.type === 'human')?.name
+          const coordinator = data.agents.find((agent) => agent.id === 'coordinator')?.name
+          const peerNames = data.agents.filter((agent) => agent.type !== 'human').map((agent) => agent.name)
+          setWizard((current) => ({
+            ...current,
+            teamName: data.activeProfile.name,
+            ownerName: owner || current.ownerName,
+            coordinatorName: coordinator || peerNames[0] || current.coordinatorName,
+            agentNames: peerNames.join(', '),
+            theme: data.activeProfile.theme && ['bonys-agents-cyberpunk', 'default-dark', 'minimal'].includes(data.activeProfile.theme)
+              ? data.activeProfile.theme as WizardState['theme']
+              : current.theme,
+          }))
+        }
         setApiState('backend')
       } catch {
         if (!isMounted) return
-        if (!hasBackendData) {
+        if (!hasBackendData.current) {
           setBootstrap(fallbackBootstrap)
           setApiState('fallback')
         } else {
@@ -219,6 +240,9 @@ function App() {
               : agent),
           }))
           setApiState('degraded')
+          if (selectedProfile && selectedProfile !== confirmedProfileFile.current) {
+            setSelectedProfile(confirmedProfileFile.current)
+          }
         }
       } finally {
         if (isMounted) refreshTimer = window.setTimeout(loadBootstrap, 15_000)
@@ -232,10 +256,11 @@ function App() {
       controller?.abort()
       if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
     }
-  }, [])
+  }, [selectedProfile])
 
   const agents = bootstrap.agents
   const activeProfile = bootstrap.activeProfile
+
   const generatedProfile = useMemo(() => buildProfileYaml(wizard), [wizard])
   const generatedSlug = useMemo(() => slugify(wizard.teamName), [wizard.teamName])
 
@@ -284,6 +309,17 @@ function App() {
         </nav>
         <div className="profile-card">
           <p className="eyebrow">Aktives Profil</p>
+          <label className="field profile-select">
+            <span>Teamprofil auswählen</span>
+            <select
+              value={selectedProfile || activeProfile.file}
+              onChange={(event) => setSelectedProfile(event.target.value)}
+            >
+              {(bootstrap.profiles.length ? bootstrap.profiles : [activeProfile]).map((profile) => (
+                <option key={profile.file} value={profile.file}>{profile.name}</option>
+              ))}
+            </select>
+          </label>
           <strong>{activeProfile.file}</strong>
           <span>{apiState === 'backend'
             ? 'Live aus Backend-YAML geladen.'
