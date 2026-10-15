@@ -1,7 +1,9 @@
 # Private Peer-Adressen gehören in <MISSION_CONTROL_DATA_DIR>/peers.yaml,
 # im Container also /app/data/peers.yaml. Diese Datei ist nur ein Muster.
-# Die Adressen werden für GET /health verwendet und nicht an das Frontend ausgeliefert.
+# Ohne Schlüssel wird GET /health verwendet. Mit api_key_env fragt das Backend
+# zusätzlich GET /health/detailed ab. Adressen und Schlüssel bleiben serverseitig.
 
 peers:
   example-agent:
     endpoint: http://agent.example.internal:8377
+    api_key_env: HERMES_PEER_EXAMPLE_KEY

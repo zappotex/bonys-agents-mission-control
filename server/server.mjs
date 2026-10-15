@@ -98,17 +98,23 @@ async function buildAgents(agentsConfig, profile) {
     .filter((agent) => agent?.enabled !== false)
     .map(async (agent, index) => {
       const id = agent.id || `agent-${index + 1}`
-      const endpoint = privatePeers[agent.peer]?.endpoint || normalizePublicValue(agent.endpoint)
-      const liveStatus = agent.type === 'hermes-peer' && endpoint
-        ? await probePeerHealth(endpoint)
+      const privatePeer = privatePeers[agent.peer] || {}
+      const privateEndpoint = normalizePublicValue(privatePeer.endpoint)
+      const endpoint = privateEndpoint || normalizePublicValue(agent.endpoint)
+      const peerCredential = privateEndpoint
+        ? resolvePeerCredential(privatePeer)
+        : resolvePeerCredential()
+      const liveObservation = agent.type === 'hermes-peer' && endpoint
+        ? await probePeerHealth(endpoint, peerCredential)
         : undefined
       return {
         id,
         name: agent.name || id,
         role: agent.role || 'Agent',
         type: agent.type || 'placeholder',
-        status: liveStatus || normalizeAgentStatus(agent.status),
-        statusSource: liveStatus ? 'live' : 'configured',
+        status: liveObservation?.status || normalizeAgentStatus(agent.status),
+        statusSource: liveObservation ? 'live' : 'configured',
+        ...(liveObservation?.activitySource ? { activitySource: liveObservation.activitySource } : {}),
         tags: Array.isArray(agent.tags) ? agent.tags : [],
       }
     }))
@@ -124,33 +130,76 @@ async function readPrivatePeers() {
   return parsed.peers && typeof parsed.peers === 'object' ? parsed.peers : {}
 }
 
-async function probePeerHealth(endpoint) {
-  const cached = peerHealthCache.get(endpoint)
+function resolvePeerCredential(peer) {
+  const envName = typeof peer?.api_key_env === 'string' ? peer.api_key_env.trim() : ''
+  if (!/^(?:MISSION_CONTROL_PEER|HERMES_PEER)_[A-Z0-9_]+_KEY$/.test(envName)) {
+    return { apiKey: '', cacheIdentity: 'public' }
+  }
+  return { apiKey: process.env[envName] || '', cacheIdentity: envName }
+}
+
+async function probePeerHealth(endpoint, credential) {
+  const { apiKey, cacheIdentity } = credential
+  const cacheKey = `${endpoint}\n${apiKey ? cacheIdentity : 'public'}`
+  const cached = peerHealthCache.get(cacheKey)
   if (cached?.expiresAt > Date.now()) return cached.status
   if (cached?.promise) return cached.promise
 
-  const promise = fetchPeerHealth(endpoint)
-  peerHealthCache.set(endpoint, { promise })
+  const promise = fetchPeerHealth(endpoint, apiKey)
+  peerHealthCache.set(cacheKey, { promise })
   const status = await promise
-  peerHealthCache.set(endpoint, { status, expiresAt: Date.now() + peerHealthCacheMs })
+  peerHealthCache.set(cacheKey, { status, expiresAt: Date.now() + peerHealthCacheMs })
   return status
 }
 
-async function fetchPeerHealth(endpoint) {
+async function fetchPeerHealth(endpoint, apiKey) {
+  let base
   try {
-    const base = new URL(endpoint)
-    if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password) return 'offline'
+    base = new URL(endpoint)
+    if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password) {
+      return { status: 'offline', activitySource: 'reachability' }
+    }
+  } catch {
+    return { status: 'offline', activitySource: 'reachability' }
+  }
+
+  if (apiKey) {
+    try {
+      const detailedUrl = new URL('health/detailed', base.href.endsWith('/') ? base.href : `${base.href}/`)
+      const detailedResponse = await fetch(detailedUrl, {
+        headers: { accept: 'application/json', authorization: `Bearer ${apiKey}` },
+        redirect: 'error',
+        signal: AbortSignal.timeout(1500),
+      })
+      if (detailedResponse.ok) {
+        const detailed = await detailedResponse.json()
+        if (['ok', 'degraded'].includes(detailed.status)) {
+          const busy = detailed.gateway_busy === true
+            || Number(detailed.active_agents || 0) > 0
+            || Number(detailed.api_server?.active_runs || 0) > 0
+          return { status: busy ? 'busy' : 'online', activitySource: 'hermes-detailed' }
+        }
+      }
+    } catch {
+      // Detaildaten sind optional; Erreichbarkeit wird unabhängig darunter geprüft.
+    }
+  }
+
+  try {
     const healthUrl = new URL('health', base.href.endsWith('/') ? base.href : `${base.href}/`)
     const response = await fetch(healthUrl, {
       headers: { accept: 'application/json' },
       redirect: 'error',
       signal: AbortSignal.timeout(1500),
     })
-    if (!response.ok) return 'offline'
+    if (!response.ok) return { status: 'offline', activitySource: 'reachability' }
     const body = await response.json()
-    return body?.status === 'ok' ? 'online' : 'offline'
+    return {
+      status: body?.status === 'ok' ? 'online' : 'offline',
+      activitySource: 'reachability',
+    }
   } catch {
-    return 'offline'
+    return { status: 'offline', activitySource: 'reachability' }
   }
 }
 

@@ -28,14 +28,14 @@ Die Projekte teilen Herkunft und Stil, hängen technisch aber nicht voneinander 
 - Agenten-Flotte, geladen aus `config/agents.yaml` und dem aktiven Profil
 - Profilwähler im Dashboard; Agenten-Flotte und Setup-Wizard wechseln gemeinsam zwischen den verfügbaren Profilen
 - Node-Backend, liest die YAML-Dateien zur Laufzeit (`/api/health`, `/api/profiles`, `/api/bootstrap`)
-- Live-Erreichbarkeit für Hermes-Peers über deren `/health`-Endpunkt (`online`/`offline`); ohne privaten Endpunkt ehrlich `standby`
+- Live-Erreichbarkeit über `/health`; mit privatem Peer-Schlüssel zusätzlich echter Hermes-Arbeitsstatus über `/health/detailed` (`busy`/`online`)
 - Frontend fällt ohne Backend auf veröffentlichungssichere Beispieldaten zurück
 - Mission Board (Oberfläche vorhanden, Inhalte noch statisch)
 - Setup-Wizard mit Live-YAML-Vorschau, Kopieren und Herunterladen
 - Private Werte aus `*.local.yaml`-Profilen werden standardmäßig geschwärzt
 - Docker-Image für amd64 und arm64, Installation auf Agent-PCs per Skript (siehe unten)
 
-**Noch nicht:** Profile auf dem Server speichern, tatsächliche Beschäftigung laufender Hermes-Aufträge,
+**Noch nicht:** Profile auf dem Server speichern, Auftragshistorie und Detailansicht laufender Hermes-Aufträge,
 Obsidian-/Projektindex, dauerhaft gespeicherte Missionen. Siehe [docs/plan.md](docs/plan.md).
 
 ## Installation mit Bony's Agents
@@ -149,20 +149,28 @@ Private Peer-Adressen kommen in `<MISSION_CONTROL_DATA_DIR>/peers.yaml` (im Cont
 peers:
   barney:
     endpoint: http://barney.internal:8377
+    api_key_env: HERMES_PEER_BARNEY_KEY
 ```
 
-Der Schlüssel (`barney`) entspricht `peer:` in `config/agents.yaml`. Mission Control ruft ausschließlich
-`GET /health` mit 1,5 Sekunden Zeitlimit ab. Ein erfolgreicher Hermes-Healthcheck ergibt `online`, ein nicht
-erreichbarer konfigurierter Peer `offline`; ohne Endpunkt bleibt der Status `standby`. `busy` wird nicht aus
-Erreichbarkeit abgeleitet, weil erst eine spätere Auftragsintegration echte Beschäftigung belegen kann.
-Peer-Adressen aus `peers.yaml` werden nicht an das Frontend ausgeliefert.
+Der Schlüssel (`barney`) entspricht `peer:` in der Agentenkonfiguration. Ohne `api_key_env` ruft Mission Control
+`GET /health` mit 1,5 Sekunden Zeitlimit ab; das beweist ausschließlich Erreichbarkeit (`online`). Mit einem
+serverseitig gesetzten Peer-Schlüssel fragt das Backend zusätzlich das authentifizierte `GET /health/detailed`
+ab. `busy` wird nur gemeldet, wenn Hermes `gateway_busy: true`, `active_agents > 0` oder mindestens
+einen aktiven API-Run meldet. Ein authentifiziert erreichbarer, aber untätiger Peer bleibt `online`.
+
+Als `api_key_env` werden ausschließlich dedizierte Namen mit `HERMES_PEER_…_KEY` oder
+`MISSION_CONTROL_PEER_…_KEY` akzeptiert. Die Werte gehören in die Serverumgebung, niemals in YAML. Sind
+Detaildaten oder Schlüssel nicht verfügbar, fällt Mission Control auf die reine Erreichbarkeitsprüfung zurück
+und erfindet keinen Arbeitsstatus. Peer-Adressen, Variablennamen und Schlüsselwerte werden nicht an das
+Frontend ausgeliefert.
 
 ## Datenschutz
 
 Private Pfade, Peer-Adressen, Tokens und andere Geheimnisse gehören **nicht** ins Repository.
 Eigene Werte kommen in eine Datei `profiles/<name>.local.yaml` – diese ist per `.gitignore` ausgeschlossen.
 Öffentliche Profile verwenden Platzhalter wie `CHANGE_ME_PEER_URL` und `CHANGE_ME_PRIVATE_PATH`.
-Private Peer-Adressen für die Live-Prüfung liegen ausschließlich im Daten-Volume als `peers.yaml`.
+Private Peer-Adressen und die Namen dedizierter Peer-Schlüsselvariablen liegen ausschließlich im Daten-Volume
+als `peers.yaml`; Schlüsselwerte bleiben in der Serverumgebung.
 
 Der Setup-Wizard schreibt bewusst noch keine Dateien auf den Server, damit private Pfade nicht unbemerkt
 gespeichert oder veröffentlicht werden.
@@ -186,8 +194,8 @@ It is a sibling of [Bony's Agents](https://github.com/zappotex/BonysAgents) and
 [Bony's VPN](https://github.com/zappotex/bonys-vpn), but technically independent.
 
 **Status:** development version 0.2.0 – React/Vite/TypeScript frontend, Node backend reading YAML at
-runtime, setup wizard, Docker files and live Hermes peer reachability. Not yet: profile switching, saving
-profiles, persisted missions or real busy state from running peer jobs.
+runtime, setup wizard, resilient profile switching, Docker files, live Hermes peer reachability and
+authenticated busy/idle detection. Not yet: saving profiles or persisted missions.
 
 **Install (Debian/Ubuntu, amd64/arm64):** download `install.sh` from the latest release and run
 `sudo bash install.sh --version 0.1.0 --install-deps`, then open `http://127.0.0.1:8787/`.
