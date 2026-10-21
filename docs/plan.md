@@ -334,13 +334,13 @@ und Tests enden.
 - Fokustest, Volltest, Build, Diff-Prüfung und Browserprüfung erfolgreich abgeschlossen.
 - Abschlussstand: `npm test` 140/140, Browser-Konsole ohne JavaScript-Fehler.
 
-## Sitzung 60 – Release 0.2.0 lokal vorbereiten (erledigt, nicht veröffentlicht)
+## Sitzung 60 – Release 0.2.0 veröffentlicht (erledigt)
 
-- Veröffentlichungsgebundene Versionsprüfung für `package.json`, Installer, `.env.example` und `agentpc.json` vorbereitet.
-- Release-Bundle mit `scripts/make-bundle.sh` in `.release-prep/` erzeugt.
-- `SHA256SUMS` erfolgreich geprüft; Archivinhalt kontrolliert.
-- Die aktuell veröffentlichten 0.1.0-Verweise im Arbeitsbaum bleiben unverändert, damit keine Installation auf ein noch nicht veröffentlichtes Artefakt zeigt.
-- Kein Tag, kein Push, kein GitHub-Release, kein GHCR-Upload und keine externe Kommunikation.
+- Versionsmetadaten, Installer und Dokumentation auf 0.2.0 synchronisiert.
+- Debian-13-Installationstest, Tests, Lint, Build und Audit erfolgreich.
+- Commit `0a263a7` und Tag `v0.2.0` veröffentlicht.
+- GitHub-Release mit Bundle, Installer, `agentpc.json` und `SHA256SUMS` erstellt.
+- GHCR-Multi-Architektur-Image für amd64 und arm64 veröffentlicht.
 
 ## Sitzung 9 – Veröffentlichung (noch nicht freigegeben)
 
