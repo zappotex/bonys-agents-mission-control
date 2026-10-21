@@ -7,7 +7,7 @@
 # Exit-Codes: 0 ok · 1 Fehler · 2 Voraussetzung fehlt · 3 zu wenig RAM/Festplatte · 4 Healthcheck rot
 set -euo pipefail
 
-DEFAULT_VERSION="0.2.3"
+DEFAULT_VERSION="0.2.4"
 REPO="zappotex/bonys-agents-mission-control"
 
 usage() {
