@@ -11,16 +11,52 @@ import {
   GitBranch,
   HardDrive,
   Network,
+  Pencil,
   PlayCircle,
+  Plus,
   RadioTower,
+  Save,
   Settings2,
   ShieldCheck,
   Sparkles,
+  SquareStop,
   Users,
   WandSparkles,
+  X,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { parse } from 'yaml'
+import {
+  canStartMissionRun,
+  createMissionRunPoller,
+  filterMissions,
+  formatMissionTimestamp,
+  missionStateCounts,
+  missionEmptyState,
+  missionRunActionLabel,
+  missionHistoryForDisplay,
+  missionDescriptionForDisplay,
+  missionOwnerForDisplay,
+  missionResultForClipboard,
+  missionStateClass,
+  missionStateLabel,
+  missionTitleForDisplay,
+  resultKindLabelForMission,
+  missionFilterSummary,
+  normalizeMissionResponse,
+  outboxMissions,
+  resultKindForMission,
+  replaceMission,
+} from './mission-runtime.mjs'
+import {
+  applyBootstrapFailure,
+  applyBootstrapSuccess,
+  createBootstrapPoller,
+  deriveWizardIdentity,
+  persistSelectedProfile,
+  readStoredProfile,
+  rollbackProfileAfterFailure,
+} from './bootstrap-runtime.mjs'
 import agentsYaml from '../config/agents.yaml?raw'
 import bonysProfileYaml from '../profiles/bonys-agents.example.yaml?raw'
 import './App.css'
@@ -35,6 +71,7 @@ type Agent = {
   type: AgentType
   status: AgentStatus
   statusSource?: 'live' | 'configured' | 'stale'
+  activitySource?: 'hermes-detailed' | 'reachability'
   tags: string[]
   endpoint?: string
 }
@@ -73,6 +110,13 @@ type ProfileMeta = {
   localOnly: boolean
 }
 
+type ProjectDocument = {
+  id: string
+  title: string
+  date: string
+  tags: string[]
+}
+
 type BootstrapData = {
   app?: {
     name: string
@@ -81,19 +125,57 @@ type BootstrapData = {
   source: 'backend' | 'fallback'
   activeProfile: ProfileMeta
   profiles: ProfileMeta[]
+  team?: {
+    owner?: string
+    coordinator?: string
+  }
   agents: Agent[]
+  projectIndex: {
+    status: 'disabled' | 'ready' | 'unavailable'
+    documents: ProjectDocument[]
+  }
   privacy?: {
     privateValuesVisible: boolean
     redaction: string
   }
 }
 
-type Mission = {
-  id: string
+type MissionRunHistoryEntry = {
+  attempt: number
+  runId?: string
+  agentId?: string
+  status?: Mission['runStatus']
+  startedAt?: string
+  finishedAt?: string
+}
+
+type Mission = {  id: string
+  profile: string
   title: string
   owner: string
   state: 'running' | 'planned' | 'review' | 'done'
   description: string
+  result?: string
+  resultKind?: 'note' | 'link' | 'file'
+  createdAt: string
+  runId?: string
+  runAttempt?: number
+  idempotencyKey?: string
+  runStartedAt?: string
+  runFinishedAt?: string
+  agentId?: string
+  runStatus?: 'starting' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
+  runError?: string
+  runHistory?: MissionRunHistoryEntry[]
+  updatedAt: string
+}
+
+type MissionDraft = {
+  title: string
+  description: string
+  result: string
+  resultKind: 'note' | 'link' | 'file'
+  owner: string
 }
 
 type WizardState = {
@@ -124,36 +206,20 @@ const fallbackBootstrap: BootstrapData = {
     localOnly: false,
   },
   profiles: [],
+  team: {
+    owner: publicBonysProfile.team?.owner,
+    coordinator: publicBonysProfile.team?.coordinator,
+  },
   agents: buildAgentsFromConfig(publicAgentsConfig, publicBonysProfile),
+  projectIndex: {
+    status: 'disabled',
+    documents: [],
+  },
   privacy: {
     privateValuesVisible: false,
     redaction: 'frontend fallback uses publish-safe example data',
   },
 }
-
-const missions: Mission[] = [
-  {
-    id: 'mission-control',
-    title: 'Bonys Agents Mission Control',
-    owner: 'Phaseone0815',
-    state: 'running',
-    description: 'Open-source Dashboard für frei konfigurierbare Agenten-Teams.',
-  },
-  {
-    id: 'profile-system',
-    title: 'Konfigurierbares Profil-System',
-    owner: 'Phaseone0815',
-    state: 'running',
-    description: 'Jeder Nutzer kann eigene Agenten, Pfade, Peers und Themes definieren.',
-  },
-  {
-    id: 'bonys-preset',
-    title: 'Bonys vorkonfiguriertes Teamprofil',
-    owner: 'Bony + Phaseone0815',
-    state: 'review',
-    description: 'Teamprofil mit Bony, Phaseone0815, Barney, Current und Lily.',
-  },
-]
 
 const defaultWizardState: WizardState = {
   teamName: 'Bonys Agents',
@@ -182,84 +248,160 @@ const stateLabels = {
   done: 'Fertig',
 }
 
+const resultKindLabels = {
+  note: 'Notiz',
+  link: 'Link',
+  file: 'Datei-Referenz',
+}
+
+function getBrowserStorage() {
+  try {
+    return window.localStorage
+  } catch {
+    return undefined
+  }
+}
+
 function App() {
   const [wizard, setWizard] = useState<WizardState>(defaultWizardState)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const [outboxCopyId, setOutboxCopyId] = useState('')
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'exists' | 'failed'>('idle')
   const [bootstrap, setBootstrap] = useState<BootstrapData>(fallbackBootstrap)
   const [apiState, setApiState] = useState<'loading' | 'backend' | 'degraded' | 'fallback'>('loading')
-  const [selectedProfile, setSelectedProfile] = useState('')
+  const [selectedProfile, setSelectedProfile] = useState(() => readStoredProfile(getBrowserStorage()))
+  const [missions, setMissions] = useState<Mission[]>([])
+  const [missionProfile, setMissionProfile] = useState('')
+  const [missionState, setMissionState] = useState<'ready' | 'saving' | 'unavailable' | 'failed'>('ready')
+  const [missionRunPollingFailed, setMissionRunPollingFailed] = useState(false)
+  const [missionPendingId, setMissionPendingId] = useState('')
+  const [missionDraft, setMissionDraft] = useState<MissionDraft>({ title: '', description: '', result: '', resultKind: 'note', owner: '' })
+  const [missionEditId, setMissionEditId] = useState('')
+  const [missionEditDraft, setMissionEditDraft] = useState<MissionDraft>({ title: '', description: '', result: '', resultKind: 'note', owner: '' })
+  const [missionFilter, setMissionFilter] = useState<'all' | Mission['state']>('all')
+  const [missionQuery, setMissionQuery] = useState('')
+  const missionsRef = useRef<Mission[]>([])
   const loadedProfileFile = useRef('')
   const hasBackendData = useRef(false)
   const confirmedProfileFile = useRef('')
+  const missionRunPollerRef = useRef<ReturnType<typeof createMissionRunPoller> | null>(null)
 
   useEffect(() => {
-    let isMounted = true
-    let refreshTimer: number | undefined
-    let controller: AbortController | undefined
-
-    const loadBootstrap = async () => {
-      controller = new AbortController()
-      try {
-        const profileQuery = selectedProfile ? `?profile=${encodeURIComponent(selectedProfile)}` : ''
-        const response = await fetch(`/api/bootstrap${profileQuery}`, { signal: controller.signal })
+    const poller = createBootstrapPoller({
+      fetchBootstrap: async (profile: string, signal: AbortSignal) => {
+        const profileQuery = profile ? `?profile=${encodeURIComponent(profile)}` : ''
+        const response = await fetch(`/api/bootstrap${profileQuery}`, { signal })
         if (!response.ok) {
           throw new Error(`Backend returned ${response.status}`)
         }
-        const data = await response.json() as BootstrapData
-        if (!isMounted) return
+        return response.json() as Promise<BootstrapData>
+      },
+      onSuccess: (data: BootstrapData) => {
         hasBackendData.current = true
         confirmedProfileFile.current = data.activeProfile.file
-        setBootstrap({ ...data, source: 'backend' })
+        persistSelectedProfile(getBrowserStorage(), data.activeProfile.file)
+        const result = applyBootstrapSuccess(data)
+        setBootstrap(result.bootstrap)
         if (loadedProfileFile.current !== data.activeProfile.file) {
           loadedProfileFile.current = data.activeProfile.file
-          const owner = data.agents.find((agent) => agent.type === 'human')?.name
-          const coordinator = data.agents.find((agent) => agent.id === 'coordinator')?.name
-          const peerNames = data.agents.filter((agent) => agent.type !== 'human').map((agent) => agent.name)
           setWizard((current) => ({
             ...current,
             teamName: data.activeProfile.name,
-            ownerName: owner || current.ownerName,
-            coordinatorName: coordinator || peerNames[0] || current.coordinatorName,
-            agentNames: peerNames.join(', '),
+            ...deriveWizardIdentity(data, current),
             theme: data.activeProfile.theme && ['bonys-agents-cyberpunk', 'default-dark', 'minimal'].includes(data.activeProfile.theme)
               ? data.activeProfile.theme as WizardState['theme']
               : current.theme,
           }))
         }
-        setApiState('backend')
-      } catch {
-        if (!isMounted) return
-        if (!hasBackendData.current) {
-          setBootstrap(fallbackBootstrap)
-          setApiState('fallback')
-        } else {
-          setBootstrap((current) => ({
-            ...current,
-            agents: current.agents.map((agent) => agent.statusSource === 'live'
-              ? { ...agent, status: 'offline', statusSource: 'stale' }
-              : agent),
-          }))
-          setApiState('degraded')
-          if (selectedProfile && selectedProfile !== confirmedProfileFile.current) {
-            setSelectedProfile(confirmedProfileFile.current)
-          }
+        setApiState(result.apiState)
+      },
+      onFailure: () => {
+        const hasConfirmedBackendData = hasBackendData.current
+        setApiState(hasConfirmedBackendData ? 'degraded' : 'fallback')
+        setBootstrap((current) => applyBootstrapFailure(
+          current,
+          fallbackBootstrap,
+          hasConfirmedBackendData,
+        ).bootstrap)
+        const rollbackProfile = rollbackProfileAfterFailure(selectedProfile, confirmedProfileFile.current)
+        if (rollbackProfile !== undefined) {
+          persistSelectedProfile(getBrowserStorage(), rollbackProfile)
+          setSelectedProfile(rollbackProfile)
         }
-      } finally {
-        if (isMounted) refreshTimer = window.setTimeout(loadBootstrap, 15_000)
-      }
-    }
+      },
+    })
 
-    loadBootstrap()
-
-    return () => {
-      isMounted = false
-      controller?.abort()
-      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
-    }
+    poller.start(selectedProfile)
+    return () => poller.stop()
   }, [selectedProfile])
 
   const agents = bootstrap.agents
   const activeProfile = bootstrap.activeProfile
+  const missionOwners = useMemo(() => Array.from(new Set(agents.map((agent) => agent.name))), [agents])
+  const missionDraftOwner = missionOwners.includes(missionDraft.owner)
+    ? missionDraft.owner
+    : bootstrap.team?.coordinator || missionOwners[0] || ''
+  const missionLoading = missionProfile !== activeProfile.file
+  const visibleMissions = missionLoading ? [] : filterMissions(missions, missionFilter, missionQuery)
+  const completedMissions = missionLoading ? [] : outboxMissions(missions)
+  const missionCounts = missionStateCounts(missions)
+  const hasPendingMissionRuns = !missionLoading && missions.some((mission) => (
+    Boolean(mission.runId) && ['starting', 'running'].includes(mission.runStatus || '')
+  ))
+
+  useEffect(() => {
+    missionsRef.current = missions
+  }, [missions])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const profile = activeProfile.file
+    fetch(`/api/missions?profile=${encodeURIComponent(profile)}`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Backend returned ${response.status}`)
+        const result = normalizeMissionResponse(await response.json())
+        setMissions(result.missions)
+        setMissionProfile(profile)
+        setMissionState(result.storageAvailable ? 'ready' : 'unavailable')
+        setMissionRunPollingFailed(false)
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return
+        setMissions([])
+        setMissionProfile(profile)
+        setMissionState('failed')
+      })
+    return () => controller.abort()
+  }, [activeProfile.file])
+
+  useEffect(() => {
+    if (!hasPendingMissionRuns) return
+    const profile = activeProfile.file
+    const poller = createMissionRunPoller({
+      getMissions: () => missionsRef.current,
+      fetchStatus: async (mission: Mission, currentProfile: string, signal: AbortSignal) => {
+        const response = await fetch(`/api/missions/${encodeURIComponent(mission.id)}/run/status`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ profile: currentProfile }),
+          signal,
+        })
+        if (!response.ok) throw new Error(`Backend returned ${response.status}`)
+        return (await response.json() as { mission: Mission }).mission
+      },
+      onMission: (mission: Mission) => {
+        setMissions((current) => replaceMission(current, mission))
+        setMissionRunPollingFailed(false)
+      },
+      onFailure: () => setMissionRunPollingFailed(true),
+    })
+    missionRunPollerRef.current = poller
+    poller.start(profile)
+    return () => {
+      poller.stop()
+      if (missionRunPollerRef.current === poller) missionRunPollerRef.current = null
+    }
+  }, [activeProfile.file, hasPendingMissionRuns])
 
   const generatedProfile = useMemo(() => buildProfileYaml(wizard), [wizard])
   const generatedSlug = useMemo(() => slugify(wizard.teamName), [wizard.teamName])
@@ -284,6 +426,149 @@ function App() {
     } catch {
       setCopyState('failed')
       window.setTimeout(() => setCopyState('idle'), 2200)
+    }
+  }
+
+  function copyMissionResult(mission: Mission) {
+    const result = missionResultForClipboard(mission)
+    if (!result) return
+    try {
+      copyTextFallback(result)
+      setOutboxCopyId(mission.id)
+      window.setTimeout(() => setOutboxCopyId(''), 3000)
+    } catch {
+      setOutboxCopyId('failed')
+      window.setTimeout(() => setOutboxCopyId(''), 2200)
+    }
+  }
+  async function saveProfile() {
+    setSaveState('saving')
+    try {
+      const response = await fetch('/api/profiles', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          ...wizard,
+          agentNames: wizard.agentNames.split(',').map((agent) => agent.trim()).filter(Boolean),
+        }),
+      })
+      if (response.status === 409) {
+        setSaveState('exists')
+        return
+      }
+      if (!response.ok) throw new Error(`Backend returned ${response.status}`)
+      const result = await response.json() as { file: string; selectable: boolean }
+      if (result.selectable) setSelectedProfile(result.file)
+      setSaveState('saved')
+    } catch {
+      setSaveState('failed')
+    }
+  }
+
+  async function createMissionEntry(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!missionDraft.title.trim() || !missionDraftOwner) return
+    setMissionState('saving')
+    try {
+      const response = await fetch('/api/missions', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          profile: activeProfile.file,
+          title: missionDraft.title,
+          description: missionDraft.description,
+          owner: missionDraftOwner,
+        }),
+      })
+      if (!response.ok) throw new Error(`Backend returned ${response.status}`)
+      const result = await response.json() as { mission: Mission }
+      setMissions((current) => replaceMission(current, result.mission))
+      setMissionDraft((current) => ({ ...current, title: '', description: '', result: '', resultKind: 'note' }))
+      setMissionState('ready')
+    } catch {
+      setMissionState('failed')
+    }
+  }
+
+  async function updateMissionEntry(mission: Mission, changes: Partial<Pick<Mission, 'title' | 'description' | 'result' | 'resultKind' | 'owner' | 'state'>>) {
+    setMissionPendingId(mission.id)
+    try {
+      const response = await fetch(`/api/missions/${encodeURIComponent(mission.id)}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ profile: activeProfile.file, ...changes }),
+      })
+      if (!response.ok) throw new Error(`Backend returned ${response.status}`)
+      const result = await response.json() as { mission: Mission }
+      setMissions((current) => replaceMission(current, result.mission))
+      setMissionState('ready')
+      setMissionRunPollingFailed(false)
+      return true
+    } catch {
+      setMissionState('failed')
+      return false
+    } finally {
+      setMissionPendingId('')
+    }
+  }
+
+  function beginMissionEdit(mission: Mission) {
+    setMissionEditId(mission.id)
+    setMissionEditDraft({ title: mission.title, description: mission.description, result: mission.result || '', resultKind: mission.resultKind || 'note', owner: mission.owner })
+  }
+
+  async function saveMissionEdit(mission: Mission) {
+    if (!missionEditDraft.title.trim()) return
+    const saved = await updateMissionEntry(mission, {
+      title: missionEditDraft.title,
+      description: missionEditDraft.description,
+      result: missionEditDraft.result,
+      resultKind: missionEditDraft.resultKind,
+    })
+    if (saved) setMissionEditId('')
+  }
+
+  async function startMissionRun(mission: Mission) {
+    setMissionPendingId(mission.id)
+    try {
+      const response = await fetch(`/api/missions/${encodeURIComponent(mission.id)}/run`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ profile: activeProfile.file }),
+      })
+      if (!response.ok) throw new Error(`Backend returned ${response.status}`)
+      const result = await response.json() as { mission: Mission }
+      setMissions((current) => replaceMission(current, result.mission))
+      setMissionState('ready')
+      setMissionRunPollingFailed(false)
+    } catch {
+      setMissionState('failed')
+    } finally {
+      setMissionPendingId('')
+    }
+  }
+
+  async function stopMissionRun(mission: Mission) {
+    const poller = missionRunPollerRef.current
+    poller?.invalidate(mission.id)
+    setMissionPendingId(mission.id)
+    try {
+      const response = await fetch(`/api/missions/${encodeURIComponent(mission.id)}/run/stop`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ profile: activeProfile.file }),
+      })
+      if (!response.ok) throw new Error(`Backend returned ${response.status}`)
+      const result = await response.json() as { mission: Mission }
+      setMissions((current) => replaceMission(current, result.mission))
+      if (['starting', 'running'].includes(result.mission.runStatus || '')) poller?.resume(mission.id)
+      setMissionState('ready')
+      setMissionRunPollingFailed(false)
+    } catch {
+      poller?.resume(mission.id)
+      setMissionState('failed')
+    } finally {
+      setMissionPendingId('')
     }
   }
 
@@ -316,7 +601,9 @@ function App() {
               onChange={(event) => setSelectedProfile(event.target.value)}
             >
               {(bootstrap.profiles.length ? bootstrap.profiles : [activeProfile]).map((profile) => (
-                <option key={profile.file} value={profile.file}>{profile.name}</option>
+                <option key={profile.file} value={profile.file}>
+                  {profile.name}{profile.localOnly ? ' · lokal' : profile.publishSafe ? ' · öffentlich' : ''}
+                </option>
               ))}
             </select>
           </label>
@@ -340,7 +627,7 @@ function App() {
           </div>
           <div className="hero-grid">
             <Metric icon={<Bot />} label="Agenten" value={agents.length.toString()} />
-            <Metric icon={<FolderKanban />} label="Missionen" value={missions.length.toString()} />
+            <Metric icon={<FolderKanban />} label="Missionen" value={missionCounts.all.toString()} />
             <Metric icon={<ShieldCheck />} label="Lizenz" value="GPL" />
             <Metric
               icon={<GitBranch />}
@@ -360,7 +647,9 @@ function App() {
                   <span
                     className={`status-pill ${statusTone[agent.status]}`}
                     title={agent.statusSource === 'live'
-                      ? 'Live über den Hermes-Healthcheck geprüft'
+                      ? agent.activitySource === 'hermes-detailed'
+                        ? 'Live: Arbeitsstatus über authentifizierte Hermes-Detaildaten'
+                        : 'Live: nur Erreichbarkeit über den Hermes-Healthcheck'
                       : agent.statusSource === 'stale'
                         ? 'Letzte Live-Prüfung fehlgeschlagen'
                         : 'Konfigurierter Standardstatus'}
@@ -382,19 +671,189 @@ function App() {
 
         <section id="missions" className="panel split-panel">
           <div>
-            <SectionTitle icon={<FolderKanban />} title="Mission Board" subtitle="Erste Arbeitsansicht für laufende Projekte, Reviews und geplante Aufgaben." />
-            <div className="mission-list">
-              {missions.map((mission) => (
-                <article className="mission-row" key={mission.id}>
-                  <div>
-                    <span className={`mission-state state-${mission.state}`}>{stateLabels[mission.state]}</span>
-                    <h3>{mission.title}</h3>
-                    <p>{mission.description}</p>
-                  </div>
-                  <strong>{mission.owner}</strong>
-                </article>
+            <SectionTitle id="mission-board-title" icon={<FolderKanban />} title="Mission Board" subtitle="Missionen dauerhaft anlegen, Agenten zuweisen und durch ihren Arbeitsstatus führen." />
+            <form className="mission-form" onSubmit={createMissionEntry}>
+              <label className="field">
+                <span>Titel</span>
+                <input
+                  required
+                  maxLength={160}
+                  value={missionDraft.title}
+                  onChange={(event) => setMissionDraft({ ...missionDraft, title: event.target.value })}
+                  placeholder="Neue Mission"
+                />
+              </label>
+              <label className="field">
+                <span>Beschreibung</span>
+                <textarea
+                  maxLength={2000}
+                  value={missionDraft.description}
+                  onChange={(event) => setMissionDraft({ ...missionDraft, description: event.target.value })}
+                  placeholder="Ziel und erwartetes Ergebnis"
+                />
+              </label>
+              <label className="field">
+                <span>Zuweisen an</span>
+                <select value={missionDraftOwner} onChange={(event) => setMissionDraft({ ...missionDraft, owner: event.target.value })}>
+                  {missionOwners.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
+                </select>
+              </label>
+              <button
+                type="submit"
+                className="primary-button"
+                disabled={missionLoading || missionState === 'saving' || missionState === 'unavailable' || !missionDraftOwner}
+              >
+                <Plus size={16} /> {missionState === 'saving' ? 'Speichert …' : 'Mission anlegen'}
+              </button>
+            </form>
+            {!missionLoading && missionState === 'unavailable' && <p className="muted" role="status">Für Missionen ist noch kein lokaler Datenordner konfiguriert.</p>}
+            {!missionLoading && missionState === 'failed' && <p className="mission-error" role="alert">Mission Board konnte nicht gespeichert oder geladen werden.</p>}
+            {!missionLoading && missionRunPollingFailed && <p className="mission-error" role="status">Der Hermes-Run-Status konnte nicht aktualisiert werden. Der letzte bestätigte Stand bleibt sichtbar.</p>}
+            <div className="mission-filters" aria-label="Missionen filtern" aria-controls="mission-list">
+              <span className="muted">Ansicht</span>
+              {([['all', 'Alle'], ...Object.entries(stateLabels)] as Array<[typeof missionFilter, string]>).map(([state, label]) => (
+                <button key={state} type="button" aria-pressed={missionFilter === state} className={missionFilter === state ? 'filter-button active' : 'filter-button'} onClick={() => setMissionFilter(state)}>
+                  {label} <span className="filter-count">{missionCounts[state]}</span>
+                </button>
               ))}
             </div>
+            <label className="mission-search">
+              <span>Missionen durchsuchen</span>
+              <div className="mission-search-control">
+                <input aria-describedby="mission-filter-summary" value={missionQuery} onChange={(event) => setMissionQuery(event.target.value)} placeholder="Titel, Beschreibung oder Agent" />
+                {missionQuery && <button type="button" className="search-clear" aria-label="Mission-Suche leeren" onClick={() => setMissionQuery('')}><X size={15} /></button>}
+              </div>
+            </label>
+            <p id="mission-filter-summary" className="mission-filter-summary" role="status">{missionFilterSummary({ total: missionCounts.all, visible: visibleMissions.length, query: missionQuery, state: missionFilter })}</p>
+            <div id="mission-list" className="mission-list" role="region" aria-labelledby="mission-board-title" aria-busy={missionLoading}>
+              {visibleMissions.map((mission) => (
+                <article className="mission-row" key={mission.id}>
+                  <div className="mission-copy">
+                    <span className={`mission-state state-${missionStateClass(mission.state)}`}>{missionStateLabel(mission.state)}</span>
+                    {missionEditId === mission.id ? (
+                      <div className="mission-edit-form">
+                        <label className="field">
+                          <span>Titel</span>
+                          <input required maxLength={160} value={missionEditDraft.title} onChange={(event) => setMissionEditDraft({ ...missionEditDraft, title: event.target.value })} />
+                        </label>
+                        <label className="field">
+                          <span>Beschreibung</span>
+                          <textarea maxLength={2000} value={missionEditDraft.description} onChange={(event) => setMissionEditDraft({ ...missionEditDraft, description: event.target.value })} />
+                        </label>
+                        <label className="field">
+                          <span>Ergebnis / Output</span>
+                          <textarea id="mission-result-output" aria-describedby="mission-result-output-hint" maxLength={4000} value={missionEditDraft.result} onChange={(event) => setMissionEditDraft({ ...missionEditDraft, result: event.target.value })} placeholder="Datei, Link oder kurze Ergebnisnotiz" />
+                          <small id="mission-result-output-hint" className="field-hint">{missionEditDraft.result.length}/4000 Zeichen</small>
+                        </label>
+                        <label className="field">
+                          <span>Ergebnisart</span>
+                          <select value={missionEditDraft.resultKind} onChange={(event) => setMissionEditDraft({ ...missionEditDraft, resultKind: event.target.value as MissionDraft['resultKind'] })}>
+                            {Object.entries(resultKindLabels).map(([kind, label]) => <option key={kind} value={kind}>{label}</option>)}
+                          </select>
+                        </label>
+                        <div className="inline-actions">
+                          <button type="button" className="primary-button" disabled={missionPendingId === mission.id || !missionEditDraft.title.trim()} onClick={() => saveMissionEdit(mission)}>
+                            <Save size={15} /> Speichern
+                          </button>
+                          <button type="button" className="ghost-button" disabled={missionPendingId === mission.id} onClick={() => setMissionEditId('')}>
+                            <X size={15} /> Abbrechen
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <h3>{missionTitleForDisplay(mission)}</h3>
+                        <p>{missionDescriptionForDisplay(mission)}</p>
+                        {mission.result && <p className="mission-result"><strong>Ergebnis:</strong> <small className="result-kind-badge" aria-label={`Ergebnisart: ${resultKindLabelForMission(mission)}`}>{resultKindLabelForMission(mission)}</small> {mission.result}</p>}
+                        <button type="button" className="text-button" disabled={missionPendingId === mission.id} onClick={() => beginMissionEdit(mission)}>
+                          <Pencil size={14} /> Mission bearbeiten
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  <div className="mission-controls">
+                    <label>
+                      <span>Agent</span>
+                      <select
+                        value={mission.owner}
+                        disabled={missionPendingId === mission.id}
+                        onChange={(event) => updateMissionEntry(mission, { owner: event.target.value })}
+                      >
+                        {!missionOwners.includes(mission.owner) && <option value={mission.owner}>{mission.owner}</option>}
+                        {missionOwners.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Status</span>
+                      <select
+                        value={mission.state}
+                        disabled={missionPendingId === mission.id}
+                        onChange={(event) => updateMissionEntry(mission, { state: event.target.value as Mission['state'] })}
+                      >
+                        {Object.entries(stateLabels).map(([state, label]) => <option key={state} value={state}>{label}</option>)}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      disabled={missionPendingId === mission.id || !canStartMissionRun(mission)}
+                      onClick={() => startMissionRun(mission)}
+                    >
+                      <PlayCircle size={15} /> {missionPendingId === mission.id ? 'Startet …' : missionRunActionLabel(mission)}
+                    </button>
+                    {mission.runId && ['starting', 'running'].includes(mission.runStatus || '') && (
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        disabled={missionPendingId === mission.id}
+                        onClick={() => stopMissionRun(mission)}
+                      >
+                        <SquareStop size={15} /> {missionPendingId === mission.id ? 'Stoppt …' : 'Auftrag stoppen'}
+                      </button>
+                    )}
+                    {mission.runStatus && <small className="muted">Run: {mission.runStatus}{mission.agentId ? ` · ${mission.agentId}` : ''}</small>}
+                    <MissionDetails mission={mission} />
+                  </div>
+                </article>
+              ))}
+              {missionLoading && <p className="muted">Missionen werden geladen …</p>}
+              {!missionLoading && visibleMissions.length === 0 && (
+                <div className="mission-empty-state">
+                  <p className="muted">{missionEmptyState({ total: missions.length, visible: visibleMissions.length, query: missionQuery, state: missionFilter })}</p>
+                  {missions.length > 0 && (missionQuery.trim() || missionFilter !== 'all') && (
+                    <button type="button" className="text-button" aria-label="Aktive Filter zurücksetzen" onClick={() => { setMissionQuery(''); setMissionFilter('all') }}>
+                      Filter zurücksetzen
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+            <section className="outbox-card" aria-labelledby="outbox-title" aria-live="polite">
+              <div className="section-heading compact">
+                <div>
+                  <p className="eyebrow">Outbox</p>
+                  <h3 id="outbox-title">Fertige Ergebnisse</h3>
+                </div>
+                <span className="muted" aria-label={`${completedMissions.length} fertige Ergebnisse`}>{completedMissions.length}</span>
+              </div>
+              {completedMissions.length > 0 ? (
+                <ul className="outbox-list" aria-label="Fertige Missionsergebnisse">
+                  {completedMissions.map((mission) => {
+                    const copied = outboxCopyId === mission.id
+                    const copyFailed = outboxCopyId === 'failed'
+                    return <li key={mission.id} aria-label={`${missionTitleForDisplay(mission)} – ${resultKindLabelForMission(mission)}`}>
+                      <strong>{missionTitleForDisplay(mission)}</strong>
+                      <small>{resultKindLabels[resultKindForMission(mission) || 'note']} · {missionOwnerForDisplay(mission)}</small>
+                      <time dateTime={mission.updatedAt}>{formatMissionTimestamp(mission.updatedAt)}</time>
+                      <span>{mission.result}</span>
+                      <button type="button" className="text-button" onClick={() => copyMissionResult(mission)} aria-live="polite" aria-atomic="true" aria-label={`Ergebnis von ${mission.title} kopieren`}>
+                        {copied ? 'Kopiert' : copyFailed ? 'Kopieren fehlgeschlagen' : 'Ergebnis kopieren'}
+                      </button>
+                    </li>
+                  })}
+                </ul>
+              ) : <p className="muted">Noch keine fertigen Ergebnisse hinterlegt.</p>}
+            </section>
           </div>
           <div className="timeline-card">
             <p className="eyebrow">Timeline</p>
@@ -407,11 +866,39 @@ function App() {
               <li><PlayCircle /> Runtime-Backend v0.5</li>
               <li><CheckCircle2 /> Hermes-Peer-Erreichbarkeit live</li>
             </ol>
+            <div className="project-index">
+              <p className="eyebrow">Projektindex</p>
+              {bootstrap.projectIndex.status === 'ready' && bootstrap.projectIndex.documents.length > 0 ? (
+                <div className="project-index-list">
+                  {bootstrap.projectIndex.documents.map((document) => (
+                    <article key={document.id} className="project-index-item">
+                      <div>
+                        <strong>{document.title}</strong>
+                        <span>{document.date}</span>
+                      </div>
+                      {document.tags.length > 0 && (
+                        <div className="tag-list">
+                          {document.tags.map((tag) => <span key={tag}>{tag}</span>)}
+                        </div>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted">
+                  {bootstrap.projectIndex.status === 'unavailable'
+                    ? 'Der konfigurierte Markdown-Ordner ist nicht sicher erreichbar.'
+                    : bootstrap.projectIndex.status === 'ready'
+                      ? 'Keine Markdown-Dokumente gefunden.'
+                      : 'Kein Markdown-/Obsidian-Index konfiguriert.'}
+                </p>
+              )}
+            </div>
           </div>
         </section>
 
         <section id="setup" className="panel setup-panel">
-          <SectionTitle icon={<WandSparkles />} title="Setup-Wizard" subtitle="Erste konfigurierbare Oberfläche für fremde Installationen. Später schreibt sie echte YAML-Dateien." />
+          <SectionTitle icon={<WandSparkles />} title="Setup-Wizard" subtitle="Konfigurierbare Oberfläche für eigene Installationen mit geschützter lokaler Profilspeicherung." />
           <div className="wizard-grid">
             <form className="wizard-form">
               <WizardInput label="Teamname" value={wizard.teamName} onChange={(teamName) => setWizard({ ...wizard, teamName })} />
@@ -438,7 +925,7 @@ function App() {
               <div className="generated-header">
                 <div>
                   <p className="eyebrow">Generiertes Profil</p>
-                  <span>Vorschau — Download speichert lokal im Browser, kein Server-Schreiben.</span>
+                  <span>Vorschau — Download oder geschütztes Speichern als lokales Serverprofil.</span>
                 </div>
                 <div className="profile-actions">
                   <button type="button" className="ghost-button" onMouseDown={copyProfile}>
@@ -447,8 +934,20 @@ function App() {
                   <button type="button" className="primary-button" onMouseDown={downloadProfile}>
                     <Download size={16} /> YAML laden
                   </button>
+                  <button type="button" className="primary-button" disabled={saveState === 'saving'} onClick={saveProfile}>
+                    <Save size={16} /> {saveState === 'saving' ? 'Speichert …' : 'Lokal speichern'}
+                  </button>
                 </div>
               </div>
+              {saveState !== 'idle' && saveState !== 'saving' && (
+                <p className="muted" role="status">
+                  {saveState === 'saved'
+                    ? 'Lokales Profil sicher gespeichert.'
+                    : saveState === 'exists'
+                      ? 'Ein lokales Profil mit diesem Namen existiert bereits.'
+                      : 'Profil konnte nicht gespeichert werden.'}
+                </p>
+              )}
               <pre className="generated-profile">{generatedProfile}</pre>
             </div>
           </div>
@@ -545,6 +1044,47 @@ function copyTextFallback(text: string) {
   }
 }
 
+function MissionDetails({ mission }: { mission: Mission }) {
+  const history = missionHistoryForDisplay(mission)
+  return (
+    <details className="mission-details">
+      <summary>Details & Verlauf</summary>
+      <div className="mission-details-body">
+        <p className="muted">Erstellt: {formatMissionTime(mission.createdAt)} · Geändert: {formatMissionTime(mission.updatedAt)}</p>
+        <p>Aktueller Versuch: {mission.runAttempt || 'Noch nicht gestartet'}</p>
+        {history.length === 0 ? <p className="muted">Noch kein Verlauf vorhanden.</p> : (
+          <ol className="mission-history">
+            {history.map((entry) => (
+              <li key={entry.attempt}>
+                <strong>Versuch {entry.attempt}</strong>
+                <span>{runStatusLabels[entry.status || 'starting'] || 'Unbekannt'}</span>
+                {entry.agentId && <span> · {entry.agentId}</span>}
+                {entry.startedAt && <time dateTime={entry.startedAt}> · Start {formatMissionTime(entry.startedAt)}</time>}
+                {entry.finishedAt && <time dateTime={entry.finishedAt}> · Ende {formatMissionTime(entry.finishedAt)}</time>}
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+    </details>
+  )
+}
+
+const runStatusLabels: Record<string, string> = {
+  starting: 'Startet',
+  running: 'Läuft',
+  completed: 'Abgeschlossen',
+  failed: 'Fehlgeschlagen',
+  cancelled: 'Abgebrochen',
+  interrupted: 'Unterbrochen',
+}
+
+function formatMissionTime(value?: string) {
+  if (!value) return '—'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })
+}
+
 function WizardInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
     <label className="field">
@@ -604,12 +1144,12 @@ function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; 
   )
 }
 
-function SectionTitle({ icon, title, subtitle }: { icon: React.ReactNode; title: string; subtitle: string }) {
+function SectionTitle({ id, icon, title, subtitle }: { id?: string; icon: React.ReactNode; title: string; subtitle: string }) {
   return (
     <div className="section-title">
       <div className="section-icon">{icon}</div>
       <div>
-        <h2>{title}</h2>
+        <h2 id={id}>{title}</h2>
         <p>{subtitle}</p>
       </div>
     </div>

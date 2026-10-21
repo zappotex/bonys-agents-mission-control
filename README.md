@@ -2,7 +2,7 @@
 
 Open-Source-Dashboard („Mission Control“) für frei konfigurierbare Agenten-Teams.
 
-> **Stand:** frühe Entwicklungsversion 0.1.0 – lauffähiges Grundgerüst, noch kein fertiges Produkt.
+> **Stand:** Entwicklungsversion 0.2.0 – lauffähiges Grundgerüst mit automatisierten Tests und lokalen Sicherheitsprüfungen, noch kein fertiges Produkt.
 
 ## Was ist Mission Control?
 
@@ -12,8 +12,6 @@ Pfade, Profile und Integrationen kommen aus YAML-Dateien und lassen sich für je
 Bonys Team wird als vorkonfiguriertes Beispielprofil mitgeliefert (`profiles/bonys-agents.example.yaml`).
 
 ## Die Bony's-Agents-Familie
-
-![Bony's VPN: Tunnelliste, Details, Autostart und Kill-Switch](docs/images/missioncontrol.png)
 
 Mission Control ist ein eigenständiges Projekt neben:
 
@@ -30,13 +28,13 @@ Die Projekte teilen Herkunft und Stil, hängen technisch aber nicht voneinander 
 - Node-Backend, liest die YAML-Dateien zur Laufzeit (`/api/health`, `/api/profiles`, `/api/bootstrap`)
 - Live-Erreichbarkeit über `/health`; mit privatem Peer-Schlüssel zusätzlich echter Hermes-Arbeitsstatus über `/health/detailed` (`busy`/`online`)
 - Frontend fällt ohne Backend auf veröffentlichungssichere Beispieldaten zurück
-- Mission Board (Oberfläche vorhanden, Inhalte noch statisch)
-- Setup-Wizard mit Live-YAML-Vorschau, Kopieren und Herunterladen
+- Mission Board mit profilbezogener lokaler Speicherung: Missionen anlegen, Agenten zuweisen und Status ändern
+- read-only Markdown-/Obsidian-Projektindex mit Titel, Datum und Tags ohne Ausgabe privater Dateipfade
+- Setup-Wizard mit Live-YAML-Vorschau, Kopieren, Herunterladen und geschütztem Speichern als lokales Profil
 - Private Werte aus `*.local.yaml`-Profilen werden standardmäßig geschwärzt
 - Docker-Image für amd64 und arm64, Installation auf Agent-PCs per Skript (siehe unten)
 
-**Noch nicht:** Profile auf dem Server speichern, Auftragshistorie und Detailansicht laufender Hermes-Aufträge,
-Obsidian-/Projektindex, dauerhaft gespeicherte Missionen. Siehe [docs/plan.md](docs/plan.md).
+**Enthalten:** Auftragshistorie mit begrenzten, sicheren Run-Snapshots und eine zugängliche Detailansicht pro Mission. Missionen werden lokal profilbezogen gespeichert; ein Auftrag kann aus einer Mission gestartet, sein Status automatisch abgefragt, historisiert und ein laufender Run gestoppt werden. Der Stand bleibt eine lokale Entwicklungsversion; Veröffentlichung und abschließende Gesamtprüfung bleiben offen. Siehe [docs/plan.md](docs/plan.md).
 
 ## Installation mit Bony's Agents
 
@@ -93,7 +91,7 @@ docker compose -f deploy/compose.yaml --project-directory . --env-file .env up -
 ```bash
 npm install
 npm run backend                # API auf http://127.0.0.1:8788
-npm run dev -- --host 0.0.0.0  # Frontend, leitet /api an das Backend weiter
+npm run dev                    # Frontend auf http://127.0.0.1:5173, leitet /api an das Backend weiter
 ```
 
 ## Build prüfen
@@ -140,6 +138,18 @@ Umgebungsvariablen des Backends:
 | `MISSION_CONTROL_PROFILE` | `bonys-agents.example.yaml` | aktives Profil |
 | `MISSION_CONTROL_SHOW_PRIVATE` | `false` | `true` zeigt Werte aus `*.local.yaml` ungeschwärzt |
 | `MISSION_CONTROL_DATA_DIR` | – (im Container `/app/data`) | Datenordner; eigene Profile in `<Datenordner>/profiles/` |
+| `MISSION_CONTROL_API_TOKEN` | automatisch erzeugt | Bearer-Token für Schreibzugriffe außerhalb von Loopback |
+
+### Betriebsgrenzen der lokalen Mission-Ablage
+
+Die unterstützte Architektur ist genau ein Mission-Control-Node-Prozess pro Datenordner. Eine gemeinsame
+Missionsablage mit mehreren Backend-Prozessen oder Cluster-Koordination ist nicht Bestandteil der Unterstützung;
+dafür wird keine fragile Lockdatei nachgebaut.
+
+Wenn `MISSION_CONTROL_API_HOST` nicht auf Loopback (`127.0.0.1`, `::1` oder `localhost`) bindet, verlangt
+`GET /api/missions` denselben serverseitigen Bearer-Token wie die geschützten Schreibzugriffe. Bei Loopback
+bleibt der Missionslesezugriff ohne Token möglich. Das Token wird nicht an Vite oder in das Browser-Bundle
+übergeben.
 
 ### Hermes-Peer-Erreichbarkeit
 
@@ -164,6 +174,15 @@ Detaildaten oder Schlüssel nicht verfügbar, fällt Mission Control auf die rei
 und erfindet keinen Arbeitsstatus. Peer-Adressen, Variablennamen und Schlüsselwerte werden nicht an das
 Frontend ausgeliefert.
 
+### Hermes-Mission-Run-Lifecycle
+
+Missionen werden profilbezogen im lokalen Datenordner gespeichert. „Auftrag starten“ reserviert zuerst einen
+stabilen Idempotency-Schlüssel und startet danach serverseitig einen asynchronen Hermes-Run über `POST /v1/runs`.
+`runId`, Ziel-Agent, Startzeit und normalisierter Status werden an der Mission gespeichert. Solange der Run
+`starting` oder `running` ist, fragt das Frontend den Status regelmäßig über `/api/missions/<id>/run/status` ab.
+Ein laufender Run kann über `/api/missions/<id>/run/stop` gestoppt werden. Peer-Endpunkte und Credentials
+bleiben ausschließlich im Backend; sie werden weder in das Browser-Bundle noch in API-Antworten übernommen.
+
 ## Datenschutz
 
 Private Pfade, Peer-Adressen, Tokens und andere Geheimnisse gehören **nicht** ins Repository.
@@ -172,8 +191,39 @@ Eigene Werte kommen in eine Datei `profiles/<name>.local.yaml` – diese ist per
 Private Peer-Adressen und die Namen dedizierter Peer-Schlüsselvariablen liegen ausschließlich im Daten-Volume
 als `peers.yaml`; Schlüsselwerte bleiben in der Serverumgebung.
 
-Der Setup-Wizard schreibt bewusst noch keine Dateien auf den Server, damit private Pfade nicht unbemerkt
-gespeichert oder veröffentlicht werden.
+### Lokale Profile aus dem Setup-Wizard speichern
+
+`POST /api/profiles` nimmt die validierten Wizard-Felder als JSON entgegen und erzeugt ausschließlich eine neue
+`<slug>.local.yaml` unter `<MISSION_CONTROL_DATA_DIR>/profiles/`. Vorhandene Dateien werden nie überschrieben;
+die neue Datei erhält Modus `600`. Der Server normalisiert das Profil selbst, erzwingt
+`privacy.publish_safe: false` und übernimmt keine freien YAML-Strukturen vom Browser.
+
+Der Vite-Entwicklungsproxy authentifiziert serverseitig sämtliche geschützten Schreibendpunkte: `POST /api/profiles`,
+Missionen über `POST /api/missions` und `PATCH /api/missions/<id>` sowie Run-Start, Run-Status und Run-Stop
+über die entsprechenden `POST /api/missions/<id>/run...`-Endpunkte. Er übernimmt `MISSION_CONTROL_API_TOKEN`
+ausschließlich auf dem Server; der Token gelangt nicht in das Browser-Bundle. Ohne Token sind Schreibzugriffe
+nur über eine direkte, passend geprüfte Loopback-Verbindung erlaubt. Anfragen ohne `Origin` sowie Anfragen
+über einen Proxy werden ohne Token abgelehnt. `npm run dev` und `npm run preview` binden deshalb standardmäßig
+nur an `127.0.0.1`.
+
+Für bewusst entfernte oder anderweitig weitergeleitete Schreibzugriffe muss `MISSION_CONTROL_API_TOKEN` gesetzt
+und als `Authorization: Bearer <TOKEN>` gesendet werden. Profiltexte dürfen keine Unicode-Steuerzeichen enthalten;
+normalisierte Agenten-IDs müssen eindeutig sein und der Koordinator muss Teil der Agentenliste sein. Lokale
+Profile erscheinen nur dann in API und Profilwähler, wenn `MISSION_CONTROL_SHOW_PRIVATE=true` ausdrücklich
+aktiviert wurde.
+
+Der private Datenordner, sein Profil-Unterverzeichnis sowie einzelne Profil- und Peer-Dateien werden ohne
+Symlink-Following über verifizierte Verzeichnis-Handles geöffnet. Unsichere oder ausgetauschte Pfade werden
+nicht gelesen; Mission Control fällt in diesem Fall auf die mitgelieferte öffentliche Konfiguration zurück und
+verwendet keine privaten Peer-Zugangsdaten.
+
+### Markdown-/Obsidian-Projektindex
+
+Ist im aktiven Profil `integrations.notes` oder `integrations.obsidian` aktiviert, liest Mission Control den
+konfigurierten Ordner ausschließlich lesend und zeigt im Mission Board Metadaten aus Markdown-Dateien an:
+Titel, Datum und Tags. Der Index ist auf 100 Dateien, vier Verzeichnisebenen und 256 KiB pro Datei begrenzt.
+Dateiinhalte, Dateinamen und private Pfade werden nicht an das Frontend ausgeliefert. Verlinkte Basisordner,
+Unterordner und Dateien werden nicht verfolgt; nicht sicher erreichbare Ordner erscheinen als `unavailable`.
 
 ## Lizenz
 
@@ -195,10 +245,23 @@ It is a sibling of [Bony's Agents](https://github.com/zappotex/BonysAgents) and
 
 **Status:** development version 0.2.0 – React/Vite/TypeScript frontend, Node backend reading YAML at
 runtime, setup wizard, resilient profile switching, Docker files, live Hermes peer reachability and
-authenticated busy/idle detection. Not yet: saving profiles or persisted missions.
+authenticated busy/idle detection, safe local profile persistence, and profile-scoped persisted missions.
+A mission can start a real asynchronous Hermes run, poll its status, and stop a running run. Publication
+and final release verification are still pending; this version is not published.
 
-**Install (Debian/Ubuntu, amd64/arm64):** download `install.sh` from the latest release and run
-`sudo bash install.sh --version 0.1.0 --install-deps`, then open `http://127.0.0.1:8787/`.
+**Private Hermes peer credentials:** configure private peer endpoints in the server-side
+`<MISSION_CONTROL_DATA_DIR>/peers.yaml` and reference credentials with a dedicated environment variable such
+as `HERMES_PEER_EXAMPLE_KEY` or `MISSION_CONTROL_PEER_EXAMPLE_KEY` via `api_key_env`. Values stay out of YAML,
+the browser bundle, and API responses.
+
+**Run lifecycle:** starting a mission reserves a stable idempotency key, calls the peer's `POST /v1/runs`,
+stores the returned run ID and status, polls `GET /v1/runs/<run-id>` while active, and can request
+`POST /v1/runs/<run-id>/stop`. The dashboard exposes this through its mission endpoints; credentials remain
+server-side.
+
+**Install (Debian/Ubuntu, amd64/arm64):** the currently documented installer is the published `0.1.0`
+release. Do not point an existing installation at `0.2.0` until that release has been manually published.
+Run `sudo bash install.sh --version 0.1.0 --install-deps`, then open `http://127.0.0.1:8787/`.
 Details: [docs/installation-agent-pc.md](docs/installation-agent-pc.md).
 **Development:** Node.js 20.19+ or 22.12+, then `npm install`, `npm run backend`, `npm run dev`.
 
