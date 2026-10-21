@@ -18,7 +18,7 @@ Das Webinterface führt das Update **nicht selbst** aus. Es zeigt nur einen gepr
 Der Befehl sieht beispielsweise so aus:
 
 ```bash
-sudo /opt/bonys-mission-control/scripts/update.sh --version 0.2.4
+sudo /opt/bonys-mission-control/scripts/update.sh --version 0.2.5
 ```
 
 Die Versionsnummer ist nur ein Beispiel. Verwende genau die Version, die Mission Control anzeigt.
@@ -30,7 +30,7 @@ Die Versionsnummer ist nur ein Beispiel. Verwende genau die Version, die Mission
 Beispiel:
 
 ```bash
-sudo /opt/bonys-mission-control/scripts/update.sh --version 0.2.4
+sudo /opt/bonys-mission-control/scripts/update.sh --version 0.2.5
 ```
 
 Bestätige die `sudo`-Abfrage und warte, bis das Skript mit `FERTIG` endet.
@@ -60,7 +60,7 @@ curl -fsS http://127.0.0.1:8787/api/health
 Die Antwort muss unter anderem die aktualisierte Version enthalten, zum Beispiel:
 
 ```json
-{"ok":true,"version":"0.2.4"}
+{"ok":true,"version":"0.2.5"}
 ```
 
 Danach kannst du Mission Control wieder im Browser öffnen:
@@ -85,8 +85,8 @@ Wenn kein Download aus dem Internet möglich ist, kann ein geprüftes Bundle ver
 
 ```bash
 sudo /opt/bonys-mission-control/scripts/update.sh \
-  --version 0.2.4 \
-  --bundle /pfad/bonys-mission-control-0.2.4.tar.gz
+  --version 0.2.5 \
+  --bundle /pfad/bonys-mission-control-0.2.5.tar.gz
 ```
 
 Das Bundle muss zur angegebenen Version gehören. Wenn daneben eine `SHA256SUMS`-Datei liegt, wird sie ebenfalls geprüft.

@@ -1,4 +1,5 @@
 import { createServer } from 'node:http'
+import { randomUUID } from 'node:crypto'
 import { readFile, readdir } from 'node:fs/promises'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -15,6 +16,8 @@ import {
 import { canReadMissions, canWriteProfiles } from './request-security.mjs'
 import { createMissionRunStarter } from './mission-start-runtime.mjs'
 import { checkForUpdate } from './update-runtime.mjs'
+import { normalizeChatRequest, normalizePeerReply, chatConversationId } from './chat-runtime.mjs'
+import { readChat, appendChat } from './chat-storage.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '..')
@@ -53,6 +56,14 @@ createServer(async (request, response) => {
 
     if (request.method === 'GET' && url.pathname === '/api/update') {
       return sendJson(response, 200, await checkForUpdate({ currentVersion: readPackageVersion() }))
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/chat') {
+      return readChatHistory(url, response)
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/chat') {
+      return sendChatMessage(request, response)
     }
 
     if (request.method === 'GET' && url.pathname === '/api/profiles') {
@@ -111,6 +122,75 @@ createServer(async (request, response) => {
   console.log(`Bonys Agents Mission Control API listening on http://${host}:${port}`)
 })
 
+async function readChatHistory(url, response) {
+  const profile = normalizeMissionProfile(url.searchParams.get('profile'))
+  const mode = url.searchParams.get('mode') === 'team' ? 'team' : 'single'
+  const agentIds = (url.searchParams.get('agents') || '').split(',').filter(Boolean)
+  if (!profile || !agentIds.length) return sendJson(response, 400, { error: 'invalid_chat_request' })
+  const conversationId = chatConversationId(profile, mode, agentIds)
+  try {
+    return sendJson(response, 200, { conversationId, messages: await readChat(dataDir, conversationId) })
+  } catch {
+    return sendJson(response, 503, { error: 'chat_storage_unavailable' })
+  }
+}
+
+async function sendChatMessage(request, response) {
+  if (!dataDir) return sendJson(response, 503, { error: 'chat_storage_unavailable' })
+  if (!canWriteProfiles(request, process.env.MISSION_CONTROL_API_TOKEN)) return sendJson(response, 403, { error: 'forbidden' })
+  const payload = await readMissionPayload(request, response)
+  if (!payload) return
+  const profile = normalizeMissionProfile(payload.profile)
+  if (!profile) return sendJson(response, 400, { error: 'invalid_chat_request' })
+  try {
+    const configuredProfile = await readPrivateProfile(profile)
+    const configuredAgents = Array.isArray(configuredProfile?.agents) ? configuredProfile.agents : []
+    const knownAgentIds = configuredAgents.filter((agent) => agent?.type === 'hermes-peer').map((agent) => agent.id).filter(Boolean)
+    const chat = normalizeChatRequest(payload, knownAgentIds)
+    const conversationId = chatConversationId(profile, chat.mode, chat.agentIds)
+    const userMessage = { id: randomUUID(), role: 'user', content: chat.message, createdAt: new Date().toISOString() }
+    await appendChat(dataDir, conversationId, [userMessage])
+    const replies = await Promise.all(chat.agentIds.map(async (agentId) => {
+      const agent = configuredAgents.find((item) => item?.id === agentId)
+      try {
+        const peer = await resolvePeerForAgent(profile, agentId)
+        const run = await postHermesRun(peer.endpoint, peer.apiKey, `chat:${conversationId}:${userMessage.id}:${agentId}`, {
+          model: 'hermes-agent',
+          input: chat.message,
+          metadata: { chat_conversation: conversationId, agent_id: agentId },
+        })
+        const output = await waitForHermesRun(peer.endpoint, peer.apiKey, run?.run_id)
+        return {
+          id: randomUUID(), role: 'assistant', agentId, agentName: agent?.name || agentId,
+          content: normalizePeerReply(output) || 'Der Agent hat keine Textantwort geliefert.',
+          createdAt: new Date().toISOString(),
+        }
+      } catch {
+        return {
+          id: randomUUID(), role: 'assistant', agentId, agentName: agent?.name || agentId,
+          content: 'Der Agent ist derzeit nicht erreichbar oder hat keine Antwort geliefert.',
+          createdAt: new Date().toISOString(), error: true,
+        }
+      }
+    }))
+    const messages = await appendChat(dataDir, conversationId, replies)
+    return sendJson(response, 200, { conversationId, messages })
+  } catch (error) {
+    if (error?.message === 'invalid_chat_request') return sendJson(response, 400, { error: 'invalid_chat_request' })
+    console.error(error)
+    return sendJson(response, 503, { error: 'chat_unavailable' })
+  }
+}
+
+async function waitForHermesRun(endpoint, apiKey, runId) {
+  if (typeof runId !== 'string' || !runId) throw new Error('invalid_chat_run')
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const result = await getHermesRun(endpoint, apiKey, runId)
+    if (['completed', 'failed', 'cancelled', 'interrupted'].includes(result?.status)) return result
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+  }
+  throw new Error('chat_timeout')
+}
 async function sendMissionList(url, response, request) {
   const profile = normalizeMissionProfile(url.searchParams.get('profile'))
   if (!profile) return sendJson(response, 400, { error: 'invalid_profile' })

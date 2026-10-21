@@ -909,6 +909,24 @@ pre {
   color: var(--blue);
 }
 
+.chat-panel { display: grid; gap: 1rem; }
+.chat-panel h2 { display: flex; align-items: center; gap: .55rem; }
+.chat-toolbar { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; }
+.chat-mode, .chat-agents { display: flex; gap: .5rem; flex-wrap: wrap; }
+.chat-mode button, .chat-agents button { border: 1px solid rgba(53,199,255,.35); background: rgba(5,18,35,.72); color: var(--text); border-radius: 999px; padding: .55rem .8rem; cursor: pointer; }
+.chat-mode button.active, .chat-agents button.selected { background: linear-gradient(135deg, rgba(53,199,255,.35), rgba(255,173,61,.25)); border-color: var(--blue); }
+.chat-agents button { display: inline-flex; align-items: center; gap: .35rem; }
+.chat-history { min-height: 180px; max-height: 420px; overflow: auto; display: grid; gap: .7rem; padding: 1rem; border: 1px solid rgba(53,199,255,.2); border-radius: 16px; background: rgba(2,10,22,.58); }
+.chat-message { max-width: 78%; padding: .7rem .9rem; border-radius: 14px; border: 1px solid rgba(255,255,255,.08); }
+.chat-message.user { justify-self: end; background: rgba(53,199,255,.14); border-color: rgba(53,199,255,.35); }
+.chat-message.assistant { justify-self: start; background: rgba(255,173,61,.1); border-color: rgba(255,173,61,.3); }
+.chat-message.error { border-color: #ff6b6b; }
+.chat-message p { margin: .35rem 0 0; white-space: pre-wrap; }
+.chat-composer { display: flex; gap: .7rem; align-items: stretch; }
+.chat-composer textarea { flex: 1; min-height: 74px; resize: vertical; }
+.chat-composer button { min-width: 120px; display: inline-flex; align-items: center; justify-content: center; gap: .4rem; }
+.error-text { color: #ff9b9b; }
+
 .status-strip {
   padding: 18px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -971,5 +989,136 @@ pre {
   .mission-controls {
     min-width: 0;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Fluid layout: every container may shrink with the browser viewport. */
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.shell,
+.workspace,
+.panel,
+.hero-panel,
+.status-strip,
+.timeline-card,
+.profile-card {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.shell {
+  width: 100%;
+  max-width: 100vw;
+  grid-template-columns: clamp(220px, 24vw, 350px) minmax(0, 1fr);
+}
+
+.sidebar {
+  min-width: 0;
+  padding: clamp(16px, 2vw, 26px);
+}
+
+.workspace {
+  width: 100%;
+  padding: clamp(16px, 2.4vw, 34px);
+  gap: clamp(14px, 2vw, 24px);
+}
+
+.hero-panel {
+  min-height: clamp(250px, 29vw, 370px);
+  padding: clamp(22px, 4vw, 54px);
+}
+
+.panel {
+  padding: clamp(18px, 2vw, 26px);
+}
+
+.agent-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+}
+
+.mission-form {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+}
+
+pre,
+.endpoint,
+.project-index-item,
+.mission-row,
+.agent-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .shell {
+    display: block;
+  }
+
+  .sidebar {
+    position: static;
+    width: 100%;
+    height: auto;
+  }
+
+  .nav-list {
+    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  }
+
+  .hero-panel,
+  .split-panel,
+  .config-grid,
+  .wizard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-composer {
+    flex-direction: column;
+  }
+
+  .chat-composer button {
+    width: 100%;
+  }
+
+  .chat-message {
+    max-width: 92%;
+  }
+}
+
+@media (max-width: 480px) {
+  .workspace,
+  .sidebar {
+    padding: 12px;
+  }
+
+  .panel,
+  .hero-panel {
+    border-radius: 16px;
+  }
+
+  .panel {
+    padding: 15px;
+  }
+
+  .hero-panel {
+    min-height: 0;
+    padding: 20px;
+  }
+
+  .hero-grid,
+  .status-strip,
+  .wizard-form {
+    grid-template-columns: 1fr;
+  }
+
+  .section-title,
+  .generated-header {
+    flex-direction: column;
+    align-items: stretch;
   }
 }

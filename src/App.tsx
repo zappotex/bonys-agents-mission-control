@@ -10,6 +10,7 @@ import {
   FolderKanban,
   GitBranch,
   HardDrive,
+  MessageSquare,
   Network,
   Pencil,
   PlayCircle,
@@ -58,6 +59,7 @@ import {
 } from './bootstrap-runtime.mjs'
 import agentsYaml from '../config/agents.yaml?raw'
 import bonysProfileYaml from '../profiles/bonys-agents.example.yaml?raw'
+import { ChatPanel } from './ChatPanel'
 import './App.css'
 
 type AgentStatus = 'online' | 'busy' | 'standby' | 'offline'
@@ -623,6 +625,7 @@ function App() {
         </div>
         <nav className="nav-list" aria-label="Mission Control Bereiche">
           <a href="#fleet"><Users size={18} /> Agenten-Flotte</a>
+          <a href="#chat"><MessageSquare size={18} /> Agenten-Chat</a>
           <a href="#missions"><FolderKanban size={18} /> Mission Board</a>
           <a href="#setup"><WandSparkles size={18} /> Setup-Wizard</a>
           <a href="#config"><Settings2 size={18} /> Konfiguration</a>
@@ -673,6 +676,8 @@ function App() {
             />
           </div>
         </header>
+
+        <ChatPanel profile={activeProfile.file} agents={agents} />
 
         <section id="fleet" className="panel">
           <SectionTitle icon={<Users />} title="Agenten-Flotte" subtitle="Bonys Preset als Beispiel. Andere Nutzer ersetzen diese Konfiguration durch ihr eigenes Team." />

@@ -1,9 +1,10 @@
 # Bonys Agents Mission Control — Zusammenfassung
 
-Stand: 2026-10-21, lokale Entwicklungsversion 0.2.4
+Stand: 2026-10-21, lokale Entwicklungsversion 0.2.5
 
-Diese Zusammenfassung beschreibt ausschließlich den im Repository belegbaren lokalen Stand. 0.2.4 enthält das
-Update-Zentrum und die dokumentierte manuelle Aktualisierung; 0.2.1 enthielt den lokalen Docker-/Loopback-Fix.
+Diese Zusammenfassung beschreibt ausschließlich den im Repository belegbaren lokalen Stand. 0.2.5 enthält das
+Update-Zentrum, die dokumentierte manuelle Aktualisierung, den Agenten-Chat und das responsive Dashboard; 0.2.1
+enthielt den lokalen Docker-/Loopback-Fix.
 
 ## Funktionsumfang
 
@@ -22,6 +23,10 @@ Update-Zentrum und die dokumentierte manuelle Aktualisierung; 0.2.1 enthielt den
   Wiederholte Starts derselben Mission sind über einen stabilen Idempotency-Schlüssel abgesichert; ältere
   Versuchsantworten dürfen den aktuellen Versuch nicht überschreiben. Die UI zeigt den Verlauf pro Mission
   in einer zugänglichen Detailansicht.
+- Agenten-Chat mit Einzelchat und Teamchat: Teamnachrichten werden unabhängig an jeden ausgewählten Hermes-Peer
+  gesendet, Antworten bleiben agentenzugeordnet und die Chat-Historie wird lokal profilbezogen gespeichert.
+- Das Dashboard ist fluid responsiv: Sidebar, Karten, Formulare, Navigation und Chat passen sich der Fensterbreite an
+  und wechseln auf kleinen Fenstern in eine einspaltige Darstellung.
 - Peer-Erreichbarkeit über `health`; mit serverseitig verfügbarem Peer-Schlüssel zusätzlich authentifizierter
   Arbeitsstatus über `health/detailed`.
 - Read-only-Markdown-/Obsidian-Projektindex mit begrenzter Ausgabe von Titel, Datum und Tags.
@@ -60,9 +65,9 @@ Die Release-Vorbereitung prüft lokal:
 Die konkreten Ergebnisse gehören zum jeweils zuletzt ausgeführten lokalen Prüfprotokoll in
 `docs/release-notes/0.2.1.md`.
 
-## Release-Status 0.2.4
+## Release-Status 0.2.5
 
-- 0.2.4 ist lokal vorbereitet und vollständig verifiziert.
+- 0.2.5 ist lokal vorbereitet und vollständig verifiziert.
 - Das Release-Bundle und `SHA256SUMS` werden im Veröffentlichungslauf erzeugt.
 - Commit, Tag, GitHub-Release und GHCR-Image folgen im freigegebenen Veröffentlichungslauf.
 

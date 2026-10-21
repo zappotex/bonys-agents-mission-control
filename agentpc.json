@@ -1,6 +1,6 @@
 {
   "name": "bonys-mission-control",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "port": 8787,
   "bind": "127.0.0.1",
   "url": "http://127.0.0.1:8787/",
@@ -14,5 +14,5 @@
   "image": "ghcr.io/zappotex/bonys-agents-mission-control",
   "systemd_unit": "bonys-mission-control.service",
   "data_volume": "bonys-mission-control-data",
-  "install_url": "https://github.com/zappotex/bonys-agents-mission-control/releases/download/v0.2.4/install.sh"
+  "install_url": "https://github.com/zappotex/bonys-agents-mission-control/releases/download/v0.2.5/install.sh"
 }
