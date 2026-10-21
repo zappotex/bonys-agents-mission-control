@@ -21,7 +21,7 @@ while [ $# -gt 0 ]; do
     *) die 1 "Unbekannte Option: $1" ;;
   esac
 done
-[ -n "$VERSION" ] || die 1 "Bitte --version angeben (z. B. --version 0.2.2 oder --version latest)."
+[ -n "$VERSION" ] || die 1 "Bitte --version angeben (z. B. --version 0.2.3 oder --version latest)."
 [ -f "$MC_DIR/VERSION" ] || die 1 "Mission Control ist nicht installiert ($MC_DIR fehlt) – install.sh verwenden."
 
 CONF="$MC_DIR/install.conf"

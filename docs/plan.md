@@ -1,6 +1,6 @@
 # Plan – nächste Schritte
 
-Stand: 2026-10-21, Version 0.2.2. Grundlage ist die [Zusammenfassung](zusammenfassung.md)
+Stand: 2026-10-21, Version 0.2.3. Grundlage ist die [Zusammenfassung](zusammenfassung.md)
 (Abschnitt „Nächster sinnvoller Schritt“). Jede Sitzung soll mit grünem Lint, Typprüfung, Build
 und Tests enden.
 

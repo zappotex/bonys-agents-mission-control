@@ -8,8 +8,8 @@ beim Erstellen und nachträglich. Zielsystem: **Debian 13**, Benutzer **`agent`*
 ```bash
 # als root im Agent-PC (Bony's-Agents-App-Snippets laufen bereits als root)
 curl -fsSLo /tmp/mc-install.sh \
-  https://github.com/zappotex/bonys-agents-mission-control/releases/download/v0.2.2/install.sh
-bash /tmp/mc-install.sh --version 0.2.2 --user agent --install-deps
+  https://github.com/zappotex/bonys-agents-mission-control/releases/download/v0.2.3/install.sh
+bash /tmp/mc-install.sh --version 0.2.3 --user agent --install-deps
 ```
 
 Danach läuft Mission Control unter **http://127.0.0.1:8787/** (nur lokal erreichbar), startet mit dem
@@ -21,7 +21,7 @@ System und hat eine Verknüpfung „Mission Control“ auf dem Schreibtisch des 
 |---|---|
 | Installationsordner | `/opt/bonys-mission-control` |
 | Weboberfläche | `http://127.0.0.1:8787/` – Port nur an **127.0.0.1** gebunden, nicht im Netz |
-| Healthcheck | `http://127.0.0.1:8787/api/health` → `{"ok": true, "version": "0.2.2", …}` |
+| Healthcheck | `http://127.0.0.1:8787/api/health` → `{"ok": true, "version": "0.2.3", …}` |
 | Image | `ghcr.io/zappotex/bonys-agents-mission-control:<version>` (amd64 + arm64) |
 | Container | `bonys-mission-control` (Compose-Projekt `bonys-mission-control`) |
 | Daten | Docker-Volume `bonys-mission-control-data` (im Container `/app/data`, eigene Profile in `profiles/`) |
@@ -39,12 +39,12 @@ Agent-PCs zu prüfen:
 ```json
 {
   "name": "bonys-mission-control",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "port": 8787,
   "min_ram_mb": 512,
   "min_free_disk_gb": 2,
   "architectures": ["amd64", "arm64"],
-  "install_url": "https://github.com/zappotex/bonys-agents-mission-control/releases/download/v0.2.2/install.sh"
+  "install_url": "https://github.com/zappotex/bonys-agents-mission-control/releases/download/v0.2.3/install.sh"
 }
 ```
 
@@ -69,7 +69,7 @@ install.sh [--version X|latest] [--user NAME] [--desktop-dir DIR] [--port N] [--
 
 | Option | Bedeutung |
 |---|---|
-| `--version X` | Release-Version, z. B. `0.2.2` oder `v0.2.2`; `latest` = neuestes Release. Standard: die Version, zu der das Skript gehört |
+| `--version X` | Release-Version, z. B. `0.2.3` oder `v0.2.3`; `latest` = neuestes Release. Standard: die Version, zu der das Skript gehört |
 | `--user NAME` | Benutzer für die Desktop-Verknüpfung. Standard: `agent`, falls vorhanden |
 | `--desktop-dir DIR` | Schreibtisch-Ordner (Standard: aus `~/.config/user-dirs.dirs`, sonst `~/Schreibtisch` bzw. `~/Desktop`). Bony's Agents kann hier sein `$DESKTOP_DIR` übergeben |
 | `--port N` | anderer Port auf 127.0.0.1 (Standard 8787, bei Wiederholung der bisherige) |
@@ -112,7 +112,7 @@ Für eine Prozentanzeige kann Bony's Agents die Zeilen `^\[mission-control\] \((
 ### `update.sh` – auf ein anderes Release umstellen
 
 ```bash
-/opt/bonys-mission-control/scripts/update.sh --version 0.2.2      # oder --version latest
+/opt/bonys-mission-control/scripts/update.sh --version 0.2.3      # oder --version latest
 ```
 
 Lädt `install.sh` des Ziel-Release (geprüft über dessen `SHA256SUMS`) und führt es mit den bisherigen
@@ -152,8 +152,8 @@ Schlüssel und erzeugt fehlende Geheimnisse. Muss nicht von Hand aufgerufen werd
 - **App-Snippet** (läuft als root, `$AGENT_USER`, `$DESKTOP_DIR` vorhanden):
   ```bash
   curl -fsSLo /tmp/mc-install.sh \
-    https://github.com/zappotex/bonys-agents-mission-control/releases/download/v0.2.2/install.sh
-  bash /tmp/mc-install.sh --version 0.2.2 --user "$AGENT_USER" --desktop-dir "$DESKTOP_DIR" --install-deps
+    https://github.com/zappotex/bonys-agents-mission-control/releases/download/v0.2.3/install.sh
+  bash /tmp/mc-install.sh --version 0.2.3 --user "$AGENT_USER" --desktop-dir "$DESKTOP_DIR" --install-deps
   rm -f /tmp/mc-install.sh
   ```
 - **Prüfung** (`check`): `curl -fsS http://127.0.0.1:8787/api/health`
@@ -171,13 +171,13 @@ Schlüssel und erzeugt fehlende Geheimnisse. Muss nicht von Hand aufgerufen werd
 | `MISSION_CONTROL_PORT` | `8787` | Port auf 127.0.0.1 |
 | `MISSION_CONTROL_PROFILE` | `bonys-agents.example.yaml` | aktives Teamprofil |
 | `MISSION_CONTROL_SHOW_PRIVATE` | `false` | Werte aus `*.local.yaml` ungeschwärzt zeigen |
-| `MISSION_CONTROL_API_TOKEN` | `__GENERATE__` → Zufallswert | Token für künftige schreibende API-Zugriffe (Profile speichern); in 0.2.2 noch ungenutzt |
+| `MISSION_CONTROL_API_TOKEN` | `__GENERATE__` → Zufallswert | Token für künftige schreibende API-Zugriffe (Profile speichern); in 0.2.3 noch ungenutzt |
 
 Nach Änderungen: `systemctl restart bonys-mission-control`.
 
 ## Externe Zugriffe
 
-Mission Control 0.2.2 braucht **keinen** Zugriff auf Hermes, OpenClaw, Telegram oder andere Dienste und
+Mission Control 0.2.3 braucht **keinen** Zugriff auf Hermes, OpenClaw, Telegram oder andere Dienste und
 keine Zugangsdaten. Netzwerk wird nur für die Installation gebraucht (GitHub-Release, GHCR, ggf. apt).
 Hermes-Peer-Status wird serverseitig aus privaten Profil-/Peer-Daten geprüft; Endpunkte und Credentials werden nicht an das Frontend ausgeliefert.
 

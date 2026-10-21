@@ -7,9 +7,9 @@
   --border-strong: rgba(245, 158, 11, 0.35);
   --text: #d7e1ef;
   --muted: #8190a6;
-  --blue: #38bdf8;
-  --orange: #f59e0b;
-  --gold: #f6d365;
+  --blue: #35c7ff;
+  --orange: #ffad3d;
+  --gold: #ffd166;
   --green: #34d399;
   --red: #fb7185;
   --shadow: 0 30px 90px rgba(0, 0, 0, 0.45);
@@ -24,15 +24,28 @@ html {
 }
 
 body {
+  position: relative;
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
   color: var(--text);
   background:
-    radial-gradient(circle at 15% 10%, rgba(56, 189, 248, 0.18), transparent 30%),
-    radial-gradient(circle at 85% 0%, rgba(245, 158, 11, 0.16), transparent 26%),
+    linear-gradient(135deg, rgba(3, 4, 9, 0.94), rgba(8, 17, 31, 0.88)),
+    url('/assets/bonys-agents-hero.jpg') center / cover fixed,
     linear-gradient(135deg, #030409 0%, #08111f 48%, #07090f 100%);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body::before {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  content: '';
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 16% 8%, rgba(37, 211, 255, 0.18), transparent 30%),
+    radial-gradient(circle at 88% 4%, rgba(250, 166, 44, 0.16), transparent 28%),
+    linear-gradient(90deg, rgba(3, 8, 17, 0.45), transparent 48%, rgba(2, 5, 12, 0.5));
 }
 
 button,
@@ -41,6 +54,8 @@ a {
 }
 
 .shell {
+  position: relative;
+  z-index: 0;
   display: grid;
   grid-template-columns: minmax(280px, 350px) minmax(0, 1fr);
   min-height: 100vh;
@@ -50,13 +65,13 @@ a {
   position: sticky;
   top: 0;
   height: 100vh;
-  padding: 34px;
+  padding: 26px;
   display: flex;
   flex-direction: column;
-  gap: 28px;
-  border-right: 1px solid var(--border);
-  background: rgba(4, 8, 14, 0.74);
-  backdrop-filter: blur(18px);
+  gap: 22px;
+  border-right: 1px solid rgba(64, 201, 255, 0.25);
+  background: linear-gradient(180deg, rgba(3, 12, 24, 0.84), rgba(4, 8, 14, 0.74));
+  backdrop-filter: blur(22px);
 }
 
 .brand-mark,
@@ -73,6 +88,26 @@ a {
   box-shadow: inset 0 0 28px rgba(56, 189, 248, 0.12);
 }
 
+.brand-mark-image {
+  width: 100%;
+  height: 210px;
+  overflow: hidden;
+  border-radius: 24px;
+  border-color: rgba(56, 189, 248, 0.45);
+  box-shadow:
+    0 0 0 1px rgba(245, 158, 11, 0.16),
+    0 18px 46px rgba(0, 0, 0, 0.42),
+    inset 0 0 34px rgba(56, 189, 248, 0.2);
+}
+
+.brand-mark-image img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center 44%;
+  filter: saturate(1.08) contrast(1.05);
+}
 .eyebrow {
   margin: 0 0 9px;
   color: var(--orange);
@@ -134,9 +169,11 @@ h3 {
   background: rgba(255, 255, 255, 0.03);
 }
 
-.nav-list a:hover {
-  border-color: var(--border);
-  background: rgba(56, 189, 248, 0.09);
+.nav-list a:hover,
+.nav-list a:focus-visible {
+  border-color: rgba(72, 207, 255, 0.48);
+  background: linear-gradient(90deg, rgba(0, 180, 255, 0.16), rgba(255, 170, 54, 0.08));
+  box-shadow: inset 3px 0 var(--blue);
 }
 
 .profile-card,
@@ -144,10 +181,10 @@ h3 {
 .hero-panel,
 .status-strip,
 .timeline-card {
-  border: 1px solid var(--border);
-  border-radius: 28px;
-  background: var(--panel);
-  box-shadow: var(--shadow);
+  border: 1px solid rgba(76, 205, 255, 0.24);
+  border-radius: 22px;
+  background: linear-gradient(145deg, rgba(7, 20, 36, 0.86), rgba(7, 12, 23, 0.72));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34), inset 0 1px rgba(255, 255, 255, 0.04);
 }
 
 .profile-card {
@@ -914,6 +951,10 @@ pre {
   .workspace,
   .sidebar {
     padding: 18px;
+  }
+
+  .brand-mark-image {
+    height: 150px;
   }
 
   .agent-grid,

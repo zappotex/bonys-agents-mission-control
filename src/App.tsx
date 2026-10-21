@@ -18,7 +18,6 @@ import {
   Save,
   Settings2,
   ShieldCheck,
-  Sparkles,
   SquareStop,
   Users,
   WandSparkles,
@@ -612,8 +611,8 @@ function App() {
   return (
     <main className="shell">
       <aside className="sidebar">
-        <div className="brand-mark">
-          <Sparkles size={28} />
+        <div className="brand-mark brand-mark-image">
+          <img src="/assets/bonys-agents-hero.jpg" alt="Bonys Agents – drei futuristische Agenten" />
         </div>
         <div>
           <p className="eyebrow">Bonys Agents</p>
