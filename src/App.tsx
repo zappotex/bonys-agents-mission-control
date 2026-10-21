@@ -76,6 +76,15 @@ type Agent = {
   endpoint?: string
 }
 
+type UpdateState = {
+  status: 'idle' | 'checking' | 'ready' | 'failed'
+  currentVersion?: string
+  latestVersion?: string
+  updateAvailable?: boolean
+  releaseUrl?: string
+  command?: string
+}
+
 type AgentConfig = {
   id?: string
   name?: string
@@ -269,6 +278,7 @@ function App() {
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'exists' | 'failed'>('idle')
   const [bootstrap, setBootstrap] = useState<BootstrapData>(fallbackBootstrap)
   const [apiState, setApiState] = useState<'loading' | 'backend' | 'degraded' | 'fallback'>('loading')
+  const [updateState, setUpdateState] = useState<UpdateState>({ status: 'idle' })
   const [selectedProfile, setSelectedProfile] = useState(() => readStoredProfile(getBrowserStorage()))
   const [missions, setMissions] = useState<Mission[]>([])
   const [missionProfile, setMissionProfile] = useState('')
@@ -334,6 +344,10 @@ function App() {
     poller.start(selectedProfile)
     return () => poller.stop()
   }, [selectedProfile])
+
+  useEffect(() => {
+    void checkForUpdates()
+  }, [])
 
   const agents = bootstrap.agents
   const activeProfile = bootstrap.activeProfile
@@ -572,6 +586,29 @@ function App() {
     }
   }
 
+  async function checkForUpdates() {
+    setUpdateState({ status: 'checking' })
+    try {
+      const response = await fetch('/api/update')
+      if (!response.ok) throw new Error(`Backend returned ${response.status}`)
+      const result = await response.json() as Omit<UpdateState, 'status'> & { error?: string }
+      if (result.error || !result.latestVersion) throw new Error('update_check_failed')
+      setUpdateState({ status: 'ready', ...result })
+    } catch {
+      setUpdateState({ status: 'failed' })
+    }
+  }
+
+  async function copyUpdateCommand() {
+    if (!updateState.command) return
+    try {
+      await navigator.clipboard.writeText(updateState.command)
+      setUpdateState((current) => ({ ...current, status: 'ready' }))
+    } catch {
+      setUpdateState((current) => ({ ...current, status: 'failed' }))
+    }
+  }
+
   return (
     <main className="shell">
       <aside className="sidebar">
@@ -591,6 +628,7 @@ function App() {
           <a href="#setup"><WandSparkles size={18} /> Setup-Wizard</a>
           <a href="#config"><Settings2 size={18} /> Konfiguration</a>
           <a href="#status"><Activity size={18} /> Systemstatus</a>
+          <a href="#updates"><Download size={18} /> Updates</a>
         </nav>
         <div className="profile-card">
           <p className="eyebrow">Aktives Profil</p>
@@ -968,6 +1006,29 @@ function App() {
               </ul>
             </div>
           </div>
+        </section>
+
+        <section id="updates" className="panel update-panel">
+          <SectionTitle icon={<Download />} title="Updates" subtitle="Prüft das offizielle GitHub-Release und zeigt den sicheren Update-Befehl für den Agent-PC." />
+          <div className="update-actions">
+            <button type="button" className="primary-button" onClick={checkForUpdates} disabled={updateState.status === 'checking'}>
+              <Download size={16} /> {updateState.status === 'checking' ? 'Prüft …' : 'Nach Updates suchen'}
+            </button>
+            {updateState.command && (
+              <button type="button" className="ghost-button" onClick={copyUpdateCommand}>
+                <Copy size={16} /> Update-Befehl kopieren
+              </button>
+            )}
+          </div>
+          {updateState.status === 'ready' && updateState.latestVersion && (
+            <p className="muted" role="status">
+              {updateState.updateAvailable
+                ? <>Update verfügbar: <strong>v{updateState.latestVersion}</strong>. Auf dem Agent-PC ausführen: <code>{updateState.command}</code></>
+                : <>Mission Control ist aktuell auf <strong>v{updateState.currentVersion}</strong>.</>}
+              {updateState.releaseUrl && <> <a href={updateState.releaseUrl} target="_blank" rel="noreferrer">Release ansehen</a></>}
+            </p>
+          )}
+          {updateState.status === 'failed' && <p className="mission-error" role="alert">Update-Prüfung nicht verfügbar. Bitte später erneut versuchen.</p>}
         </section>
 
         <section id="status" className="status-strip">

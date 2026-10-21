@@ -183,6 +183,22 @@ h3 {
     radial-gradient(circle at 95% 90%, rgba(245, 158, 11, 0.20), transparent 30%);
 }
 
+.update-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.update-panel code {
+  overflow-wrap: anywhere;
+}
+
 .hero-grid,
 .status-strip {
   display: grid;

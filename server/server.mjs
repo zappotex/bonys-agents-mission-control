@@ -14,6 +14,7 @@ import {
 } from './profile-storage.mjs'
 import { canReadMissions, canWriteProfiles } from './request-security.mjs'
 import { createMissionRunStarter } from './mission-start-runtime.mjs'
+import { checkForUpdate } from './update-runtime.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '..')
@@ -48,6 +49,10 @@ createServer(async (request, response) => {
         activeProfile: sanitizeProfileName(activeProfileFile),
         privateValuesVisible: showPrivateValues,
       })
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/update') {
+      return sendJson(response, 200, await checkForUpdate({ currentVersion: readPackageVersion() }))
     }
 
     if (request.method === 'GET' && url.pathname === '/api/profiles') {
