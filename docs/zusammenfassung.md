@@ -1,9 +1,9 @@
 # Bonys Agents Mission Control — Zusammenfassung
 
-Stand: 2026-10-17, lokale Entwicklungsversion 0.2.0
+Stand: 2026-10-21, lokale Entwicklungsversion 0.2.1
 
-Diese Zusammenfassung beschreibt ausschließlich den im Repository belegbaren lokalen Stand. 0.2.0 ist ein
-Vorbereitungs-/Entwicklungsstand und noch kein freigegebener Veröffentlichungsstand.
+Diese Zusammenfassung beschreibt ausschließlich den im Repository belegbaren lokalen Stand. 0.2.1 enthält den
+lokalen Docker-/Loopback-Fix und ist für die Veröffentlichung vorbereitet.
 
 ## Funktionsumfang
 
@@ -58,14 +58,13 @@ Die Release-Vorbereitung prüft lokal:
 - README-Links und referenzierte Repository-Pfade
 
 Die konkreten Ergebnisse gehören zum jeweils zuletzt ausgeführten lokalen Prüfprotokoll in
-`docs/release-notes/0.2.0.md`.
+`docs/release-notes/0.2.1.md`.
 
-## Offene Release-Schritte
+## Release-Status 0.2.1
 
-- 0.2.0 ist lokal vorbereitet, aber noch nicht veröffentlicht.
-- Das lokale Release-Bundle und `SHA256SUMS` wurden erzeugt und geprüft.
-- Tag, GitHub-Release, GHCR-Image und externe Release-Kommunikation gehören in einen späteren,
-  ausdrücklich freigegebenen Veröffentlichungslauf. Externe Zustände müssen dann erneut geprüft werden.
+- 0.2.1 ist lokal vorbereitet und vollständig verifiziert.
+- Das Release-Bundle und `SHA256SUMS` wurden erzeugt und geprüft.
+- Commit, Tag, GitHub-Release und GHCR-Image folgen im freigegebenen Veröffentlichungslauf.
 
 ## Zentrale Dateien
 

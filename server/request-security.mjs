@@ -1,7 +1,8 @@
 import { timingSafeEqual } from 'node:crypto'
 
-export function canReadMissions(request, expectedToken, bindHost) {
+export function canReadMissions(request, expectedToken, bindHost, localOnly = false) {
   if (isLoopbackHost(bindHost)) return true
+  if (localOnly && isLoopbackHostHeader(request.headers.host)) return true
   return hasBearerToken(request, expectedToken)
 }
 
@@ -13,6 +14,16 @@ function hasBearerToken(request, expectedToken) {
   const expectedBuffer = Buffer.from(expected)
   const suppliedBuffer = Buffer.from(supplied)
   return expectedBuffer.length === suppliedBuffer.length && timingSafeEqual(expectedBuffer, suppliedBuffer)
+}
+
+function isLoopbackHostHeader(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return false
+  try {
+    return isLoopbackHost(new URL(`http://${raw}`).hostname)
+  } catch {
+    return false
+  }
 }
 
 function isLoopbackHost(value) {

@@ -12,6 +12,7 @@ services:
     environment:
       MISSION_CONTROL_PROFILE: ${MISSION_CONTROL_PROFILE:-bonys-agents.example.yaml}
       MISSION_CONTROL_SHOW_PRIVATE: ${MISSION_CONTROL_SHOW_PRIVATE:-false}
+      MISSION_CONTROL_LOCAL_ONLY: ${MISSION_CONTROL_LOCAL_ONLY:-true}
       MISSION_CONTROL_API_TOKEN: ${MISSION_CONTROL_API_TOKEN:?Geheimnis fehlt – scripts/ensure-secrets.sh ausführen}
     volumes:
       - data:/app/data

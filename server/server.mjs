@@ -21,6 +21,7 @@ const port = Number(process.env.MISSION_CONTROL_API_PORT || 8788)
 const host = process.env.MISSION_CONTROL_API_HOST || '127.0.0.1'
 const activeProfileFile = process.env.MISSION_CONTROL_PROFILE || 'bonys-agents.example.yaml'
 const showPrivateValues = process.env.MISSION_CONTROL_SHOW_PRIVATE === 'true'
+const localOnly = process.env.MISSION_CONTROL_LOCAL_ONLY === 'true'
 // Optionaler Datenordner (im Container ein Volume): eigene Profile in <data>/profiles
 const dataDir = process.env.MISSION_CONTROL_DATA_DIR ? path.resolve(process.env.MISSION_CONTROL_DATA_DIR) : ''
 const peerHealthCache = new Map()
@@ -108,7 +109,7 @@ createServer(async (request, response) => {
 async function sendMissionList(url, response, request) {
   const profile = normalizeMissionProfile(url.searchParams.get('profile'))
   if (!profile) return sendJson(response, 400, { error: 'invalid_profile' })
-  if (!canReadMissions(request, process.env.MISSION_CONTROL_API_TOKEN, host)) {
+  if (!canReadMissions(request, process.env.MISSION_CONTROL_API_TOKEN, host, localOnly)) {
     return sendJson(response, 403, { error: 'forbidden' })
   }
   if (!dataDir) return sendJson(response, 200, { missions: [], storageAvailable: false })
