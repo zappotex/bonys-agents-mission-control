@@ -25,7 +25,7 @@ jobs:
       - run: npm run build
       - run: npm test
       - name: shellcheck
-        run: shellcheck -x scripts/*.sh tests/agentpc/run.sh
+        run: shellcheck -x scripts/*.sh tests/agentpc/run.sh tests/agentpc/hermes-stub.sh
       - name: Versionen stimmen überein, Release-Archiv baut
         run: bash scripts/make-bundle.sh
 

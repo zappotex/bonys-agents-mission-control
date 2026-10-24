@@ -19,7 +19,7 @@ STAGE="$OUT/$NAME"
 mkdir -p "$STAGE/scripts" "$STAGE/share"
 cp "$ROOT/deploy/compose.yaml" "$ROOT/.env.example" "$ROOT/agentpc.json" "$ROOT/LICENSE" "$STAGE/"
 cp "$ROOT/deploy/mission-control.svg" "$STAGE/share/"
-for script in install update uninstall reset-secrets ensure-secrets lib; do
+for script in install update uninstall reset-secrets ensure-secrets hermes-team lib; do
   cp "$ROOT/scripts/$script.sh" "$STAGE/scripts/"
 done
 chmod 755 "$STAGE"/scripts/*.sh

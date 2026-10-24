@@ -14,6 +14,10 @@ services:
       MISSION_CONTROL_SHOW_PRIVATE: ${MISSION_CONTROL_SHOW_PRIVATE:-false}
       MISSION_CONTROL_LOCAL_ONLY: ${MISSION_CONTROL_LOCAL_ONLY:-true}
       MISSION_CONTROL_API_TOKEN: ${MISSION_CONTROL_API_TOKEN:?Geheimnis fehlt – scripts/ensure-secrets.sh ausführen}
+    # Schlüssel der angebundenen Hermes-Agenten (scripts/hermes-team.sh) – nur für root lesbar
+    env_file:
+      - path: peers.env
+        required: false
     volumes:
       - data:/app/data
     read_only: true

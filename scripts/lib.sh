@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # Gemeinsame Hilfsfunktionen für die Mission-Control-Skripte auf einem Agent-PC.
-# Wird von update.sh, uninstall.sh, reset-secrets.sh, ensure-secrets.sh und install.sh eingebunden.
+# Wird von update.sh, uninstall.sh, reset-secrets.sh, ensure-secrets.sh, hermes-team.sh und install.sh eingebunden.
 
 # shellcheck disable=SC2034  # werden von den einbindenden Skripten benutzt
 MC_NAME="bonys-mission-control"

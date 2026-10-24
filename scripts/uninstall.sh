@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Mission Control stoppen und entfernen.
 #   ohne Option: Dienste, Autostart, Verknüpfungen und Programmdateien weg –
-#                .env (Geheimnisse) und das Daten-Volume bleiben für eine spätere Neuinstallation.
+#                .env, peers.env (Geheimnisse), hermes-team.conf und das Daten-Volume bleiben für eine spätere
+#                Neuinstallation. Die Hermes-Profile selbst bleiben immer unangetastet.
 #   --purge:     zusätzlich Daten-Volume, .env, Image und den ganzen Ordner löschen.
 set -euo pipefail
 # shellcheck source=lib.sh
@@ -37,6 +38,15 @@ if command -v docker >/dev/null 2>&1; then
   docker rm -f "$MC_NAME" >/dev/null 2>&1 || true
 fi
 
+if has_systemd && [ -f /etc/systemd/system/bonys-hermes-peer@.service ]; then
+  log "Angebundene Hermes-Agenten stoppen"
+  while read -r name _; do
+    [ -n "$name" ] && systemctl disable --now "bonys-hermes-peer@$name" >/dev/null 2>&1 || true
+  done < <(cat "$MC_DIR/hermes-team.conf" 2>/dev/null)
+  rm -f /etc/systemd/system/bonys-hermes-peer@.service
+  systemctl daemon-reload
+fi
+
 log "Verknüpfungen entfernen"
 remove_desktop_shortcuts
 
@@ -49,6 +59,7 @@ if [ "$PURGE" -eq 1 ]; then
   rm -rf "$MC_DIR"
   log "Mission Control vollständig entfernt."
 else
-  find "$MC_DIR" -mindepth 1 -maxdepth 1 ! -name .env ! -name .env.example -exec rm -rf {} +
-  log "Mission Control entfernt. Behalten: $MC_DIR/.env und Docker-Volume $MC_VOLUME (löschen mit --purge)."
+  find "$MC_DIR" -mindepth 1 -maxdepth 1 ! -name .env ! -name .env.example ! -name peers.env ! -name hermes-team.conf \
+    -exec rm -rf {} +
+  log "Mission Control entfernt. Behalten: $MC_DIR/.env, peers.env und Docker-Volume $MC_VOLUME (löschen mit --purge)."
 fi

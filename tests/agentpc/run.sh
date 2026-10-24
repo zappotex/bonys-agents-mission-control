@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Installationstest in einem frischen Debian-13-Container mit systemd und eigenem Docker:
-# install.sh (mit --install-deps), Healthcheck, Idempotenz, reset-secrets, update, uninstall, --purge.
+# install.sh (mit --install-deps), Healthcheck, Idempotenz, update, hermes-team.sh, reset-secrets, uninstall, --purge.
 # Das App-Image wird lokal gebaut und per --image-archive übergeben (keine Registry nötig).
 # Aufruf aus dem Repo-Wurzelordner: tests/agentpc/run.sh   (braucht Docker mit --privileged)
 # shellcheck disable=SC2016  # Prüfbefehle laufen bewusst erst im Container
@@ -72,6 +72,24 @@ in_box "/opt/bonys-mission-control/scripts/update.sh --version $VERSION --bundle
 check "Daten nach Update vorhanden" 'curl -fsS http://127.0.0.1:8787/api/profiles | grep -q testteam.yaml'
 check "Geheimnis nach Update unverändert" "test \"\$(sed -n 's/^MISSION_CONTROL_API_TOKEN=//p' /opt/bonys-mission-control/.env | sha256sum | cut -c1-12)\" = $FIRST"
 
+step "Standardprofil und Hermes-Agenten anbinden (hermes-team.sh, Hermes-Ersatz)"
+check "Standardprofil ist das neutrale Beispielteam" 'curl -fsS http://127.0.0.1:8787/api/bootstrap | python3 -c "import json,sys; d=json.load(sys.stdin); n=[a[\"name\"] for a in d[\"agents\"]]; sys.exit(not (\"Atlas\" in n and \"Barney\" not in n))"'
+ADD_OUT="$(in_box '/opt/bonys-mission-control/scripts/hermes-team.sh add atlas --description "Koordination"' 2>&1)" || { echo "$ADD_OUT"; FAILED=1; }
+in_box '/opt/bonys-mission-control/scripts/hermes-team.sh add nova' >/dev/null
+KEY="$(in_box "sed -n 's/^HERMES_PEER_ATLAS_KEY=//p' /opt/bonys-mission-control/peers.env")"
+if [ -n "$KEY" ] && ! printf '%s' "$ADD_OUT" | grep -qF "$KEY"; then echo "OK    Schlüssel erzeugt, nicht ausgegeben"; else echo "FEHLER Schlüssel fehlt oder wurde ausgegeben"; FAILED=1; fi
+check "peers.env nur für root (600)" 'test "$(stat -c %a /opt/bonys-mission-control/peers.env)" = 600'
+check "Profil-.env gehört agent (600) mit gleichem Schlüssel" 'f=/home/agent/.hermes/profiles/atlas/.env; test "$(stat -c %U:%a $f)" = agent:600 && grep -q "^API_SERVER_KEY=$(sed -n "s/^HERMES_PEER_ATLAS_KEY=//p" /opt/bonys-mission-control/peers.env)$" $f'
+check "eigene Ports 8641/8642" 'grep -qx "atlas 8641" /opt/bonys-mission-control/hermes-team.conf && grep -qx "nova 8642" /opt/bonys-mission-control/hermes-team.conf'
+check "Dienste laufen" 'systemctl is-active bonys-hermes-peer@atlas bonys-hermes-peer@nova && systemctl is-enabled bonys-hermes-peer@atlas'
+check "peers.yaml im Daten-Volume (600)" 'f="$(docker volume inspect -f "{{.Mountpoint}}" bonys-mission-control-data)/peers.yaml"; test "$(stat -c %a "$f")" = 600 && grep -q "api_key_env: HERMES_PEER_ATLAS_KEY" "$f"'
+check "Container kennt den Schlüssel" 'docker exec bonys-mission-control sh -c "test -n \"\$HERMES_PEER_ATLAS_KEY\""'
+check "Atlas in Mission Control online" 'for i in $(seq 60); do curl -fsS http://127.0.0.1:8787/api/bootstrap | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(not any(a[\"name\"]==\"Atlas\" and a.get(\"status\")==\"online\" for a in d[\"agents\"]))" && exit 0; sleep 2; done; exit 1'
+check "list zeigt die Agenten" '/opt/bonys-mission-control/scripts/hermes-team.sh list | grep -E "^atlas +8641 +active +erreichbar"'
+in_box '/opt/bonys-mission-control/scripts/hermes-team.sh remove nova' >/dev/null
+check "remove: Dienst aus, Schlüssel weg" '! systemctl is-active bonys-hermes-peer@nova && ! grep -q HERMES_PEER_NOVA_KEY /opt/bonys-mission-control/peers.env && grep -q "^API_SERVER_ENABLED=false$" /home/agent/.hermes/profiles/nova/.env'
+check "Hand-angelegte peers.yaml wird nicht überschrieben" 'f="$(docker volume inspect -f "{{.Mountpoint}}" bonys-mission-control-data)/peers.yaml"; cp "$f" /root/peers.bak; echo "peers: {}" > "$f"; ! /opt/bonys-mission-control/scripts/hermes-team.sh add nova; r=$?; cp /root/peers.bak "$f"; exit $r'
+
 step "reset-secrets.sh (Vorlage) und erster Start danach"
 in_box '/opt/bonys-mission-control/scripts/reset-secrets.sh'
 check "Geheimnis zurückgesetzt" 'grep -q "^MISSION_CONTROL_API_TOKEN=__GENERATE__$" /opt/bonys-mission-control/.env'
@@ -84,6 +102,7 @@ step "uninstall.sh (ohne --purge)"
 in_box '/opt/bonys-mission-control/scripts/uninstall.sh'
 check "Dienst weg" '! systemctl cat bonys-mission-control && ! docker ps -a --format "{{.Names}}" | grep -qx bonys-mission-control'
 check ".env und Daten-Volume behalten" 'test -f /opt/bonys-mission-control/.env && docker volume inspect bonys-mission-control-data'
+check "Hermes-Dienste weg, peers.env behalten" '! systemctl is-active bonys-hermes-peer@atlas && ! test -e /etc/systemd/system/bonys-hermes-peer@.service && test -f /opt/bonys-mission-control/peers.env'
 check "Verknüpfungen weg" '! test -e /home/agent/Schreibtisch/bonys-mission-control.desktop && ! test -e /usr/share/applications/bonys-mission-control.desktop'
 
 step "Neuinstallation, dann uninstall.sh --purge"
