@@ -50,6 +50,8 @@ in_box "/root/release/install.sh --install-deps --bundle /root/release/bonys-mis
 check "systemd-Unit aktiv und aktiviert" 'systemctl is-active bonys-mission-control && systemctl is-enabled bonys-mission-control'
 check "Healthcheck grün" "curl -fsS http://127.0.0.1:8787/api/health | grep -q '\"version\": \"$VERSION\"'"
 check "Oberfläche liefert HTML" 'curl -fsS http://127.0.0.1:8787/ | grep -qi "<html"'
+check "Schreiben aus dem Browser erlaubt (Origin 127.0.0.1)" 'test "$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Origin: http://127.0.0.1:8787" -H "Content-Type: application/json" -d "{}" http://127.0.0.1:8787/api/missions)" = 400'
+check "Schreiben ohne Origin verboten" 'test "$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Content-Type: application/json" -d "{}" http://127.0.0.1:8787/api/missions)" = 403'
 check "Port nur an 127.0.0.1" 'ss -ltnH "sport = :8787" | awk "{print \$4}" | grep -qx "127.0.0.1:8787" && ! ss -ltnH "sport = :8787" | grep -qv "127.0.0.1:8787"'
 check ".env nur für root (600)" 'test "$(stat -c %a /opt/bonys-mission-control/.env)" = 600'
 check "Geheimnis erzeugt" '! grep -q =__GENERATE__ /opt/bonys-mission-control/.env && grep -qE "^MISSION_CONTROL_API_TOKEN=[0-9a-f]{64}$" /opt/bonys-mission-control/.env'

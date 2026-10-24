@@ -790,7 +790,8 @@ test('eine Mission startet genau einen idempotenten Hermes-Auftrag und speichert
   assert.deepEqual(second.body.mission, first.body.mission)
   assert.equal(runRequests.length, 1)
   assert.equal(runRequests[0].authorization, 'Bearer idle-peer-key')
-  assert.equal(runRequests[0].body.input, 'Peer-Auftrag testen\\n\\nEinen echten Hermes-Run starten.')
+  assert.equal(runRequests[0].body.input, 'Peer-Auftrag testen\n\nEinen echten Hermes-Run starten.')
+  assert.equal('model' in runRequests[0].body, false)
   assert.equal(runRequests[0].idempotency, first.body.mission.idempotencyKey)
   assert.equal(JSON.stringify(second.body).includes('idle-peer-key'), false)
 

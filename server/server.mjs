@@ -13,7 +13,7 @@ import {
   readPrivateDataFile,
   writeLocalProfile,
 } from './profile-storage.mjs'
-import { canReadMissions, canWriteProfiles } from './request-security.mjs'
+import { canReadMissions, canWriteProfiles, defaultGateways } from './request-security.mjs'
 import { createMissionRunStarter } from './mission-start-runtime.mjs'
 import { checkForUpdate } from './update-runtime.mjs'
 import { normalizeChatRequest, normalizePeerReply, chatConversationId } from './chat-runtime.mjs'
@@ -26,6 +26,8 @@ const host = process.env.MISSION_CONTROL_API_HOST || '127.0.0.1'
 const activeProfileFile = process.env.MISSION_CONTROL_PROFILE || 'bonys-agents.example.yaml'
 const showPrivateValues = process.env.MISSION_CONTROL_SHOW_PRIVATE === 'true'
 const localOnly = process.env.MISSION_CONTROL_LOCAL_ONLY === 'true'
+// Im Docker-Container erreicht der Browser des Agent-PCs den Server über das Gateway des Container-Netzes
+const trustedGateways = localOnly && existsSync('/.dockerenv') ? readDefaultGateways() : []
 // Optionaler Datenordner (im Container ein Volume): eigene Profile in <data>/profiles
 const dataDir = process.env.MISSION_CONTROL_DATA_DIR ? path.resolve(process.env.MISSION_CONTROL_DATA_DIR) : ''
 const peerHealthCache = new Map()
@@ -137,7 +139,7 @@ async function readChatHistory(url, response) {
 
 async function sendChatMessage(request, response) {
   if (!dataDir) return sendJson(response, 503, { error: 'chat_storage_unavailable' })
-  if (!canWriteProfiles(request, process.env.MISSION_CONTROL_API_TOKEN)) return sendJson(response, 403, { error: 'forbidden' })
+  if (!canWriteProfiles(request, process.env.MISSION_CONTROL_API_TOKEN, trustedGateways)) return sendJson(response, 403, { error: 'forbidden' })
   const payload = await readMissionPayload(request, response)
   if (!payload) return
   const profile = normalizeMissionProfile(payload.profile)
@@ -155,7 +157,6 @@ async function sendChatMessage(request, response) {
       try {
         const peer = await resolvePeerForAgent(profile, agentId)
         const run = await postHermesRun(peer.endpoint, peer.apiKey, `chat:${conversationId}:${userMessage.id}:${agentId}`, {
-          model: 'hermes-agent',
           input: chat.message,
           metadata: { chat_conversation: conversationId, agent_id: agentId },
         })
@@ -210,7 +211,7 @@ async function sendMissionList(url, response, request) {
 
 async function saveMission(request, response) {
   if (!dataDir) return sendJson(response, 503, { error: 'mission_storage_unavailable' })
-  if (!canWriteProfiles(request, process.env.MISSION_CONTROL_API_TOKEN)) {
+  if (!canWriteProfiles(request, process.env.MISSION_CONTROL_API_TOKEN, trustedGateways)) {
     return sendJson(response, 403, { error: 'forbidden' })
   }
   const payload = await readMissionPayload(request, response)
@@ -232,7 +233,7 @@ async function saveMission(request, response) {
 
 async function patchMission(request, response, id) {
   if (!dataDir) return sendJson(response, 503, { error: 'mission_storage_unavailable' })
-  if (!canWriteProfiles(request, process.env.MISSION_CONTROL_API_TOKEN)) {
+  if (!canWriteProfiles(request, process.env.MISSION_CONTROL_API_TOKEN, trustedGateways)) {
     return sendJson(response, 403, { error: 'forbidden' })
   }
   const payload = await readMissionPayload(request, response)
@@ -255,7 +256,7 @@ async function patchMission(request, response, id) {
 
 async function stopMissionRun(request, response, id) {
   if (!dataDir) return sendJson(response, 503, { error: 'mission_storage_unavailable' })
-  if (!canWriteProfiles(request, process.env.MISSION_CONTROL_API_TOKEN)) {
+  if (!canWriteProfiles(request, process.env.MISSION_CONTROL_API_TOKEN, trustedGateways)) {
     return sendJson(response, 403, { error: 'forbidden' })
   }
   const payload = await readMissionPayload(request, response)
@@ -300,7 +301,7 @@ async function stopMissionRun(request, response, id) {
 
 async function pollMissionRunStatus(request, response, id) {
   if (!dataDir) return sendJson(response, 503, { error: 'mission_storage_unavailable' })
-  if (!canWriteProfiles(request, process.env.MISSION_CONTROL_API_TOKEN)) {
+  if (!canWriteProfiles(request, process.env.MISSION_CONTROL_API_TOKEN, trustedGateways)) {
     return sendJson(response, 403, { error: 'forbidden' })
   }
   const payload = await readMissionPayload(request, response)
@@ -345,7 +346,7 @@ async function pollMissionRunStatus(request, response, id) {
 
 async function startMissionRun(request, response, id) {
   if (!dataDir) return sendJson(response, 503, { error: 'mission_storage_unavailable' })
-  if (!canWriteProfiles(request, process.env.MISSION_CONTROL_API_TOKEN)) {
+  if (!canWriteProfiles(request, process.env.MISSION_CONTROL_API_TOKEN, trustedGateways)) {
     return sendJson(response, 403, { error: 'forbidden' })
   }
   const payload = await readMissionPayload(request, response)
@@ -385,8 +386,8 @@ async function executeMissionRunStart({ claim, request }) {
   try {
     const peer = await resolvePeerForAgent(request.profile, claim.mission.agentId)
     const runResponse = await postHermesRun(peer.endpoint, peer.apiKey, claim.mission.idempotencyKey, {
-      model: 'hermes-agent',
-      input: `${request.title}${request.description ? `\\n\\n${request.description}` : ''}`,
+      // ohne "model": jeder Hermes-Agent nimmt das in seinem Profil eingestellte Modell
+      input: `${request.title}${request.description ? `\n\n${request.description}` : ''}`,
       metadata: { ...request.metadata, agent_id: claim.mission.agentId },
     })
     const runId = typeof runResponse?.run_id === 'string' ? runResponse.run_id : ''
@@ -521,7 +522,7 @@ function normalizeMissionProfile(value) {
 
 async function saveProfileFromWizard(request, response) {
   if (!dataDir) return sendJson(response, 503, { error: 'profile_storage_unavailable' })
-  if (!canWriteProfiles(request, process.env.MISSION_CONTROL_API_TOKEN)) {
+  if (!canWriteProfiles(request, process.env.MISSION_CONTROL_API_TOKEN, trustedGateways)) {
     return sendJson(response, 403, { error: 'forbidden' })
   }
   const mediaType = String(request.headers['content-type'] || '').split(';', 1)[0].trim().toLowerCase()
@@ -992,4 +993,12 @@ function contentType(filePath) {
   if (filePath.endsWith('.svg')) return 'image/svg+xml'
   if (filePath.endsWith('.json')) return 'application/json; charset=utf-8'
   return 'application/octet-stream'
+}
+
+function readDefaultGateways() {
+  try {
+    return defaultGateways(readFileSync('/proc/net/route', 'utf8'))
+  } catch {
+    return []
+  }
 }

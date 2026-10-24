@@ -2,7 +2,7 @@
 
 Open-Source-Dashboard („Mission Control“) für frei konfigurierbare Agenten-Teams.
 
-> **Stand:** Entwicklungsversion 0.2.6 – lauffähiges Grundgerüst mit automatisierten Tests und lokalen Sicherheitsprüfungen, noch kein fertiges Produkt.
+> **Stand:** Entwicklungsversion 0.2.7 – lauffähiges Grundgerüst mit automatisierten Tests und lokalen Sicherheitsprüfungen, noch kein fertiges Produkt.
 
 ## Was ist Mission Control?
 
@@ -34,7 +34,7 @@ Die Projekte teilen Herkunft und Stil, hängen technisch aber nicht voneinander 
 - Private Werte aus `*.local.yaml`-Profilen werden standardmäßig geschwärzt
 - Docker-Image für amd64 und arm64, Installation auf Agent-PCs per Skript (siehe unten)
 
-**Enthalten:** Auftragshistorie mit begrenzten, sicheren Run-Snapshots und eine zugängliche Detailansicht pro Mission. Missionen werden lokal profilbezogen gespeichert; ein Auftrag kann aus einer Mission gestartet, sein Status automatisch abgefragt, historisiert und ein laufender Run gestoppt werden. Der Stand ist als Mission Control **0.2.6** veröffentlicht. Die Oberfläche enthält unter „Updates“ eine sichere Release-Prüfung und kopiert den passenden manuellen Update-Befehl.
+**Enthalten:** Auftragshistorie mit begrenzten, sicheren Run-Snapshots und eine zugängliche Detailansicht pro Mission. Missionen werden lokal profilbezogen gespeichert; ein Auftrag kann aus einer Mission gestartet, sein Status automatisch abgefragt, historisiert und ein laufender Run gestoppt werden. Der Stand ist als Mission Control **0.2.7** veröffentlicht. Die Oberfläche enthält unter „Updates“ eine sichere Release-Prüfung und kopiert den passenden manuellen Update-Befehl.
 
 ## Installation mit Bony's Agents
 
@@ -43,8 +43,8 @@ Agent-PCs (Debian 13, amd64 und arm64) – beim Erstellen oder nachträglich. Da
 
 ```bash
 curl -fsSLo /tmp/mc-install.sh \
-  https://github.com/zappotex/bonys-agents-mission-control/releases/download/v0.2.6/install.sh
-bash /tmp/mc-install.sh --version 0.2.6 --user agent --install-deps
+  https://github.com/zappotex/bonys-agents-mission-control/releases/download/v0.2.7/install.sh
+bash /tmp/mc-install.sh --version 0.2.7 --user agent --install-deps
 ```
 
 Ergebnis: Mission Control läuft als Docker-Container unter **http://127.0.0.1:8787/** (nur lokal), startet
@@ -59,10 +59,10 @@ Mindestanforderungen maschinenlesbar: [`agentpc.json`](agentpc.json).
 Auf einem eigenen Debian-/Ubuntu-Rechner mit systemd:
 
 ```bash
-curl -fsSLO https://github.com/zappotex/bonys-agents-mission-control/releases/download/v0.2.6/install.sh
-curl -fsSLO https://github.com/zappotex/bonys-agents-mission-control/releases/download/v0.2.6/SHA256SUMS
+curl -fsSLO https://github.com/zappotex/bonys-agents-mission-control/releases/download/v0.2.7/install.sh
+curl -fsSLO https://github.com/zappotex/bonys-agents-mission-control/releases/download/v0.2.7/SHA256SUMS
 grep ' install.sh$' SHA256SUMS | sha256sum -c -
-sudo bash install.sh --version 0.2.6 --install-deps          # --user NAME für die Desktop-Verknüpfung
+sudo bash install.sh --version 0.2.7 --install-deps          # --user NAME für die Desktop-Verknüpfung
 ```
 
 Ohne `--install-deps` bricht das Skript ab, wenn Docker oder das Compose-Plugin fehlen (Exit-Code 2).
@@ -74,7 +74,7 @@ Das Update-Skript lädt das gewünschte offizielle GitHub-Release, prüft dessen
 
 ```bash
 # feste Version, empfohlen
-sudo /opt/bonys-mission-control/scripts/update.sh --version 0.2.6
+sudo /opt/bonys-mission-control/scripts/update.sh --version 0.2.7
 
 # alternativ: neuestes Release
 sudo /opt/bonys-mission-control/scripts/update.sh --version latest
@@ -87,8 +87,8 @@ Für ein lokales Bundle:
 
 ```bash
 sudo /opt/bonys-mission-control/scripts/update.sh \
-  --version 0.2.6 \
-  --bundle /pfad/bonys-mission-control-0.2.6.tar.gz
+  --version 0.2.7 \
+  --bundle /pfad/bonys-mission-control-0.2.7.tar.gz
 ```
 
 `--purge` nicht verwenden: Das gehört ausschließlich zur vollständigen Deinstallation und löscht Benutzerdaten.
@@ -286,7 +286,7 @@ roles, paths and integrations are defined in YAML profiles; Bony's own team ship
 It is a sibling of [Bony's Agents](https://github.com/zappotex/BonysAgents) and
 [Bony's VPN](https://github.com/zappotex/bonys-vpn), but technically independent.
 
-**Status:** development version 0.2.6 – React/Vite/TypeScript frontend, Node backend reading YAML at
+**Status:** development version 0.2.7 – React/Vite/TypeScript frontend, Node backend reading YAML at
 runtime, setup wizard, resilient profile switching, Docker files, live Hermes peer reachability and
 authenticated busy/idle detection, safe local profile persistence, and profile-scoped persisted missions.
 A mission can start a real asynchronous Hermes run, poll its status, and stop a running run. Publication
@@ -302,8 +302,8 @@ stores the returned run ID and status, polls `GET /v1/runs/<run-id>` while activ
 `POST /v1/runs/<run-id>/stop`. The dashboard exposes this through its mission endpoints; credentials remain
 server-side.
 
-**Install (Debian/Ubuntu, amd64/arm64):** the currently documented installer is the published `0.2.6`
-release. Install with `sudo bash install.sh --version 0.2.6 --install-deps`, then open `http://127.0.0.1:8787/`.
+**Install (Debian/Ubuntu, amd64/arm64):** the currently documented installer is the published `0.2.7`
+release. Install with `sudo bash install.sh --version 0.2.7 --install-deps`, then open `http://127.0.0.1:8787/`.
 Details: [docs/installation-agent-pc.md](docs/installation-agent-pc.md).
 **Development:** Node.js 20.19+ or 22.12+, then `npm install`, `npm run backend`, `npm run dev`.
 

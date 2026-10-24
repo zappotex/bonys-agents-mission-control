@@ -31,14 +31,15 @@ function isLoopbackHost(value) {
   return host === 'localhost' || host === '127.0.0.1' || host === '::1'
 }
 
-export function canWriteProfiles(request, expectedToken) {
+// trustedGateways: im Docker-Container kommen Anfragen über den nur an 127.0.0.1 freigegebenen Port vom
+// Gateway des Container-Netzes – diese Adressen gelten (nur mit MISSION_CONTROL_LOCAL_ONLY) wie Loopback.
+export function canWriteProfiles(request, expectedToken, trustedGateways = []) {
   if (hasBearerToken(request, expectedToken)) return true
 
-  const remoteAddress = request.socket.remoteAddress || ''
-  const loopbackSocket = remoteAddress === '127.0.0.1'
-    || remoteAddress === '::1'
-    || remoteAddress === '::ffff:127.0.0.1'
-  if (!loopbackSocket) return false
+  const remoteAddress = String(request.socket.remoteAddress || '').replace(/^::ffff:/, '')
+  const loopbackSocket = remoteAddress === '127.0.0.1' || remoteAddress === '::1'
+  const viaGateway = !loopbackSocket && remoteAddress !== '' && trustedGateways.includes(remoteAddress)
+  if (!loopbackSocket && !viaGateway) return false
 
   const origin = String(request.headers.origin || '')
   if (!origin) return false
@@ -51,8 +52,21 @@ export function canWriteProfiles(request, expectedToken) {
     return ['http:', 'https:'].includes(originUrl.protocol)
       && ['localhost', '127.0.0.1', '::1'].includes(originHostname)
       && originUrl.host.toLowerCase() === requestHost
-      && effectiveOriginPort === localPort
+      // hinter der Docker-Portfreigabe weicht der Port im Container vom freigegebenen ab
+      && (viaGateway || effectiveOriginPort === localPort)
   } catch {
     return false
   }
+}
+
+// Standard-Gateways (IPv4) aus dem Inhalt von /proc/net/route
+export function defaultGateways(routeTable) {
+  const gateways = []
+  for (const line of String(routeTable || '').split('\n').slice(1)) {
+    const [, destination, gateway] = line.trim().split(/\s+/)
+    if (destination !== '00000000' || !/^[0-9A-Fa-f]{8}$/.test(gateway || '') || gateway === '00000000') continue
+    const bytes = gateway.match(/../g).map((byte) => parseInt(byte, 16)).reverse()
+    gateways.push(bytes.join('.'))
+  }
+  return [...new Set(gateways)]
 }
