@@ -67,3 +67,5 @@ Bonys-Agents-Mission-Control-Zusammenfassung.md
 *.mov
 *.mkv
 *.wav
+__pycache__/
+*.pyc
