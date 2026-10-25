@@ -18,6 +18,7 @@ import { createMissionRunStarter } from './mission-start-runtime.mjs'
 import { checkForUpdate } from './update-runtime.mjs'
 import { normalizeChatRequest, normalizePeerReply, chatConversationId } from './chat-runtime.mjs'
 import { readChat, appendChat } from './chat-storage.mjs'
+import { MAX_AUDIO_BYTES, audioType, readLimitedBody, speakText, transcribeAudio, voiceConfig, voiceStatus } from './voice-runtime.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '..')
@@ -66,6 +67,18 @@ createServer(async (request, response) => {
 
     if (request.method === 'POST' && url.pathname === '/api/chat') {
       return sendChatMessage(request, response)
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/voice/status') {
+      return sendJson(response, 200, await voiceStatus(voiceConfig()))
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/voice/transcribe') {
+      return transcribeVoice(request, response)
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/voice/speak') {
+      return speakVoice(request, response)
     }
 
     if (request.method === 'GET' && url.pathname === '/api/profiles') {
@@ -498,6 +511,46 @@ async function readPrivateProfile(file) {
   }
   return readYaml(path.join(rootDir, 'profiles', file))
 }
+async function transcribeVoice(request, response) {
+  if (!canWriteProfiles(request, process.env.MISSION_CONTROL_API_TOKEN, trustedGateways)) {
+    return sendJson(response, 403, { error: 'forbidden' })
+  }
+  const config = voiceConfig()
+  if (!config) return sendJson(response, 503, { error: 'voice_unavailable' })
+  const type = audioType(request.headers['content-type'])
+  if (!type) return sendJson(response, 415, { error: 'unsupported_media_type' })
+  let audio
+  try {
+    audio = await readLimitedBody(request, MAX_AUDIO_BYTES)
+  } catch (error) {
+    return sendJson(response, error?.code === 'body_too_large' ? 413 : 400, { error: error?.code || 'invalid_body' })
+  }
+  if (!audio.length) return sendJson(response, 400, { error: 'empty_audio' })
+  try {
+    return sendJson(response, 200, await transcribeAudio(config, audio, type))
+  } catch {
+    return sendJson(response, 502, { error: 'transcription_failed' })
+  }
+}
+
+async function speakVoice(request, response) {
+  if (!canWriteProfiles(request, process.env.MISSION_CONTROL_API_TOKEN, trustedGateways)) {
+    return sendJson(response, 403, { error: 'forbidden' })
+  }
+  const config = voiceConfig()
+  if (!config) return sendJson(response, 503, { error: 'voice_unavailable' })
+  const payload = await readMissionPayload(request, response)
+  if (!payload) return
+  try {
+    const audio = await speakText(config, payload.text)
+    response.writeHead(200, { 'content-type': 'audio/mpeg', 'content-length': audio.length, 'cache-control': 'no-store' })
+    return response.end(audio)
+  } catch (error) {
+    if (error?.code === 'invalid_text') return sendJson(response, 400, { error: 'invalid_text' })
+    return sendJson(response, 502, { error: 'speech_failed' })
+  }
+}
+
 async function readMissionPayload(request, response) {
   const mediaType = String(request.headers['content-type'] || '').split(';', 1)[0].trim().toLowerCase()
   if (mediaType !== 'application/json') {

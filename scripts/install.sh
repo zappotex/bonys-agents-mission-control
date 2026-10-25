@@ -7,7 +7,7 @@
 # Exit-Codes: 0 ok · 1 Fehler · 2 Voraussetzung fehlt · 3 zu wenig RAM/Festplatte · 4 Healthcheck rot
 set -euo pipefail
 
-DEFAULT_VERSION="0.2.7"
+DEFAULT_VERSION="0.3.0"
 REPO="zappotex/bonys-agents-mission-control"
 
 usage() {
@@ -181,6 +181,9 @@ install -d -m 755 "$MC_DIR" "$MC_DIR/scripts" "$MC_DIR/share"
 install -m 644 "$SRC/compose.yaml" "$SRC/agentpc.json" "$MC_DIR/"
 install -m 600 "$SRC/.env.example" "$MC_DIR/.env.example"
 install -m 755 "$SRC"/scripts/*.sh "$MC_DIR/scripts/"
+for f in "$SRC"/scripts/*.py; do
+  if [ -f "$f" ]; then install -m 644 "$f" "$MC_DIR/scripts/"; fi
+done
 install -m 644 "$SRC/share/mission-control.svg" "$MC_DIR/share/"
 [ -f "$SRC/LICENSE" ] && install -m 644 "$SRC/LICENSE" "$MC_DIR/"
 printf '%s\n' "$VERSION" > "$MC_DIR/VERSION"

@@ -46,6 +46,12 @@ if has_systemd && [ -f /etc/systemd/system/bonys-hermes-peer@.service ]; then
   rm -f /etc/systemd/system/bonys-hermes-peer@.service
   systemctl daemon-reload
 fi
+if has_systemd && [ -f /etc/systemd/system/bonys-hermes-sprache.service ]; then
+  log "Sprachdienst stoppen"
+  systemctl disable --now bonys-hermes-sprache.service >/dev/null 2>&1 || true
+  rm -f /etc/systemd/system/bonys-hermes-sprache.service
+  systemctl daemon-reload
+fi
 
 log "Verknüpfungen entfernen"
 remove_desktop_shortcuts
@@ -59,7 +65,7 @@ if [ "$PURGE" -eq 1 ]; then
   rm -rf "$MC_DIR"
   log "Mission Control vollständig entfernt."
 else
-  find "$MC_DIR" -mindepth 1 -maxdepth 1 ! -name .env ! -name .env.example ! -name peers.env ! -name hermes-team.conf \
+  find "$MC_DIR" -mindepth 1 -maxdepth 1 ! -name .env ! -name .env.example ! -name peers.env ! -name hermes-team.conf ! -name sprachdienst.env \
     -exec rm -rf {} +
   log "Mission Control entfernt. Behalten: $MC_DIR/.env, peers.env und Docker-Volume $MC_VOLUME (löschen mit --purge)."
 fi

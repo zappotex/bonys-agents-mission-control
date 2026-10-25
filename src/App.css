@@ -1122,3 +1122,115 @@ pre,
     align-items: stretch;
   }
 }
+/* Spracheingabe und Vorlesen (Voice.tsx) – Beschreibung in eigener Zeile, wächst mit dem Text */
+.field-description {
+  grid-column: 1 / -1;
+  order: 1;
+}
+
+.field-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.field textarea.grow {
+  field-sizing: content;
+  min-height: 84px;
+  max-height: 45vh;
+  overflow-y: auto;
+  resize: vertical;
+}
+
+.voice-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.voice-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  color: var(--text);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.08);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.voice-button:hover:not(:disabled) {
+  border-color: rgba(245, 158, 11, 0.6);
+}
+
+.voice-button.recording {
+  color: #fff;
+  border-color: rgba(239, 68, 68, 0.8);
+  background: rgba(239, 68, 68, 0.35);
+  animation: voice-pulse 1.2s ease-in-out infinite;
+}
+
+.voice-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.voice-error {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.speak-button {
+  margin-left: 8px;
+  padding: 2px 6px;
+  vertical-align: middle;
+  color: var(--muted);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.speak-button:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.voice-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.chat-composer .voice-control {
+  align-self: stretch;
+}
+
+.chat-composer .voice-button {
+  height: 100%;
+  border-radius: 12px;
+}
+
+.spin {
+  animation: voice-spin 1s linear infinite;
+}
+
+@keyframes voice-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes voice-pulse {
+  50% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.15); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-button.recording,
+  .spin {
+    animation: none;
+  }
+}

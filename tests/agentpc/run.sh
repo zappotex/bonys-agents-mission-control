@@ -92,6 +92,21 @@ in_box '/opt/bonys-mission-control/scripts/hermes-team.sh remove nova' >/dev/nul
 check "remove: Dienst aus, Schlüssel weg" '! systemctl is-active bonys-hermes-peer@nova && ! grep -q HERMES_PEER_NOVA_KEY /opt/bonys-mission-control/peers.env && grep -q "^API_SERVER_ENABLED=false$" /home/agent/.hermes/profiles/nova/.env'
 check "Hand-angelegte peers.yaml wird nicht überschrieben" 'f="$(docker volume inspect -f "{{.Mountpoint}}" bonys-mission-control-data)/peers.yaml"; cp "$f" /root/peers.bak; echo "peers: {}" > "$f"; ! /opt/bonys-mission-control/scripts/hermes-team.sh add nova; r=$?; cp /root/peers.bak "$f"; exit $r'
 
+step "Sprachdienst (hermes-team.sh voice, ohne Hermes-Sprachwerkzeuge)"
+VOICE_OUT="$(in_box '/opt/bonys-mission-control/scripts/hermes-team.sh voice on' 2>&1)" || { echo "$VOICE_OUT"; FAILED=1; }
+check "Sprachdienst läuft" 'systemctl is-active bonys-hermes-sprache && systemctl is-enabled bonys-hermes-sprache'
+VKEY="$(in_box "sed -n 's/^MISSION_CONTROL_VOICE_KEY=//p' /opt/bonys-mission-control/peers.env")"
+if [ -n "$VKEY" ] && ! printf '%s' "$VOICE_OUT" | grep -qF "$VKEY"; then echo "OK    Sprachschlüssel erzeugt, nicht ausgegeben"; else echo "FEHLER Sprachschlüssel fehlt oder wurde ausgegeben"; FAILED=1; fi
+check "sprachdienst.env nur für root (600)" 'test "$(stat -c %a /opt/bonys-mission-control/sprachdienst.env)" = 600'
+check "Sprachdienst antwortet an der Docker-Brücke" 'for i in $(seq 30); do curl -fsS "$(sed -n "s/^MISSION_CONTROL_VOICE_URL=//p" /opt/bonys-mission-control/peers.env)/health" | grep -q "\"ok\": true" && exit 0; sleep 1; done; exit 1'
+check "Sprachdienst ohne Schlüssel abgewiesen" 'test "$(curl -s -o /dev/null -w "%{http_code}" -X POST "$(sed -n "s/^MISSION_CONTROL_VOICE_URL=//p" /opt/bonys-mission-control/peers.env)/transcribe")" = 401'
+check "Mission Control kennt den Sprachdienst (ohne Werkzeuge: nicht verfügbar)" 'curl -fsS http://127.0.0.1:8787/api/voice/status | grep -q "\"available\": false"'
+check "Status-Antwort ohne Schlüssel" "! curl -fsS http://127.0.0.1:8787/api/voice/status | grep -qF '$VKEY'"
+check "voice status zeigt den Dienst" '/opt/bonys-mission-control/scripts/hermes-team.sh voice status | grep -E "^sprache +8640 +active +erreichbar"'
+in_box '/opt/bonys-mission-control/scripts/hermes-team.sh voice off' >/dev/null
+check "voice off: Dienst aus, Schlüssel weg" '! systemctl is-active bonys-hermes-sprache && ! grep -q MISSION_CONTROL_VOICE /opt/bonys-mission-control/peers.env'
+in_box '/opt/bonys-mission-control/scripts/hermes-team.sh voice on' >/dev/null
+
 step "reset-secrets.sh (Vorlage) und erster Start danach"
 in_box '/opt/bonys-mission-control/scripts/reset-secrets.sh'
 check "Geheimnis zurückgesetzt" 'grep -q "^MISSION_CONTROL_API_TOKEN=__GENERATE__$" /opt/bonys-mission-control/.env'
@@ -104,6 +119,7 @@ step "uninstall.sh (ohne --purge)"
 in_box '/opt/bonys-mission-control/scripts/uninstall.sh'
 check "Dienst weg" '! systemctl cat bonys-mission-control && ! docker ps -a --format "{{.Names}}" | grep -qx bonys-mission-control'
 check ".env und Daten-Volume behalten" 'test -f /opt/bonys-mission-control/.env && docker volume inspect bonys-mission-control-data'
+check "Sprachdienst weg" '! systemctl is-active bonys-hermes-sprache && ! test -e /etc/systemd/system/bonys-hermes-sprache.service'
 check "Hermes-Dienste weg, peers.env behalten" '! systemctl is-active bonys-hermes-peer@atlas && ! test -e /etc/systemd/system/bonys-hermes-peer@.service && test -f /opt/bonys-mission-control/peers.env'
 check "Verknüpfungen weg" '! test -e /home/agent/Schreibtisch/bonys-mission-control.desktop && ! test -e /usr/share/applications/bonys-mission-control.desktop'
 

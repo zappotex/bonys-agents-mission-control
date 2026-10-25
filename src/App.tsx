@@ -60,6 +60,8 @@ import {
 import agentsYaml from '../config/agents.yaml?raw'
 import bonysProfileYaml from '../profiles/bonys-agents.example.yaml?raw'
 import { ChatPanel } from './ChatPanel'
+import { MicButton } from './Voice'
+import { useVoiceStatus } from './voice-client'
 import './App.css'
 
 type AgentStatus = 'online' | 'busy' | 'standby' | 'offline'
@@ -272,6 +274,12 @@ function getBrowserStorage() {
   }
 }
 
+// Gesprochenen Text an das Feld anhängen (mit Leerzeichen), Grenze des Feldes beachten
+function joinSpoken(current: string, spoken: string, limit = 2000): string {
+  const joined = current.trim() ? `${current.trimEnd()} ${spoken}` : spoken
+  return joined.slice(0, limit)
+}
+
 function App() {
   const [wizard, setWizard] = useState<WizardState>(defaultWizardState)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
@@ -287,6 +295,7 @@ function App() {
   const [missionRunPollingFailed, setMissionRunPollingFailed] = useState(false)
   const [missionPendingId, setMissionPendingId] = useState('')
   const [missionDraft, setMissionDraft] = useState<MissionDraft>({ title: '', description: '', result: '', resultKind: 'note', owner: '' })
+  const voice = useVoiceStatus()
   const [missionEditId, setMissionEditId] = useState('')
   const [missionEditDraft, setMissionEditDraft] = useState<MissionDraft>({ title: '', description: '', result: '', resultKind: 'note', owner: '' })
   const [missionFilter, setMissionFilter] = useState<'all' | Mission['state']>('all')
@@ -725,9 +734,10 @@ function App() {
                   placeholder="Neue Mission"
                 />
               </label>
-              <label className="field">
-                <span>Beschreibung</span>
+              <label className="field field-description">
+                <span className="field-heading">Beschreibung {voice.available && <MicButton label="Beschreibung sprechen" onText={(spoken) => setMissionDraft((draft) => ({ ...draft, description: joinSpoken(draft.description, spoken) }))} />}</span>
                 <textarea
+                  className="grow"
                   maxLength={2000}
                   value={missionDraft.description}
                   onChange={(event) => setMissionDraft({ ...missionDraft, description: event.target.value })}
@@ -779,8 +789,8 @@ function App() {
                           <input required maxLength={160} value={missionEditDraft.title} onChange={(event) => setMissionEditDraft({ ...missionEditDraft, title: event.target.value })} />
                         </label>
                         <label className="field">
-                          <span>Beschreibung</span>
-                          <textarea maxLength={2000} value={missionEditDraft.description} onChange={(event) => setMissionEditDraft({ ...missionEditDraft, description: event.target.value })} />
+                          <span className="field-heading">Beschreibung {voice.available && <MicButton label="Beschreibung sprechen" onText={(spoken) => setMissionEditDraft((draft) => ({ ...draft, description: joinSpoken(draft.description, spoken) }))} />}</span>
+                          <textarea className="grow" maxLength={2000} value={missionEditDraft.description} onChange={(event) => setMissionEditDraft({ ...missionEditDraft, description: event.target.value })} />
                         </label>
                         <label className="field">
                           <span>Ergebnis / Output</span>

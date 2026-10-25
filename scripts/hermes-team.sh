@@ -5,11 +5,15 @@
 #   hermes-team.sh add NAME [--port N] [--description TEXT] [--user BENUTZER]
 #   hermes-team.sh remove NAME
 #   hermes-team.sh list
+#   hermes-team.sh voice on|off|status
 #
 # add: legt das Hermes-Profil NAME an (falls nötig), schaltet dessen API-Server mit eigenem Schlüssel ein
 # (nur an der Docker-Brücke, damit der Mission-Control-Container ihn erreicht), startet den Agenten als
 # systemd-Dienst bonys-hermes-peer@NAME und trägt ihn als Peer ein (peers.yaml im Daten-Volume, Schlüssel in
 # peers.env). Schlüssel werden nie angezeigt. NAME entspricht "peer:" im Teamprofil (z. B. atlas, nova, scribe).
+# Sprache und Stimme (stt/tts) übernimmt das neue Profil aus dem Standardprofil von Hermes.
+# voice on: startet den Sprachdienst (Sprache → Text, Text → Sprache mit den Einstellungen von Hermes) als
+# bonys-hermes-sprache.service – Mikrofon- und Vorlese-Knöpfe in Mission Control.
 set -euo pipefail
 # shellcheck source=lib.sh
 . "$(dirname "$(readlink -f "$0")")/lib.sh"
@@ -20,7 +24,13 @@ PEER_UNIT="bonys-hermes-peer@.service"
 FIRST_PORT=8641
 MARKER="# verwaltet von hermes-team.sh – Änderungen hier werden überschrieben"
 
-usage() { sed -n '3,12p' "$0" | sed 's/^# \{0,1\}//'; }
+VOICE_UNIT="bonys-hermes-sprache.service"
+VOICE_ENV="$MC_DIR/sprachdienst.env"
+VOICE_PORT=8640
+# Spracheinstellungen, die neue Profile vom Standardprofil übernehmen
+SPRACH_SCHLUESSEL="stt.language stt.local.language stt.local.model tts.provider tts.piper.voice tts.edge.voice voice.auto_tts"
+
+usage() { sed -n '3,16p' "$0" | sed 's/^# \{0,1\}//'; }
 
 valid_name() { [[ "$1" =~ ^[a-z0-9]{1,32}$ ]] || die 1 "Ungültiger Name: $1 (nur Kleinbuchstaben und Ziffern)"; }
 
@@ -168,6 +178,7 @@ cmd_add() {
   # eigener Gateway je Profil (Hermes bündelt sonst alle Profile, startet deren API-Server aber nicht)
   as_user "$user" hermes -p "$name" config set gateway.standalone true >/dev/null 2>&1 \
     || die 1 "Hermes-Einstellung gateway.standalone für $name konnte nicht gesetzt werden."
+  sprache_uebernehmen "$user" "$name"
 
   [ -f "$PEERS_ENV" ] || install -m 600 /dev/null "$PEERS_ENV"
   env_set "$PEERS_ENV" "$(key_var "$name")" "$key"
@@ -184,6 +195,81 @@ cmd_add() {
   systemctl restart "bonys-hermes-peer@$name"
   restart_mission_control
   log "Fertig: $name ist in Mission Control angebunden (Status erscheint nach dem Start des Agenten)."
+}
+
+sprache_uebernehmen() {  # $1 = Benutzer, $2 = Profil – nur gesetzte Werte, sonst bleibt der Hermes-Standard
+  local user="$1" name="$2" key value
+  for key in $SPRACH_SCHLUESSEL; do
+    value="$(as_user "$user" hermes config get "$key" 2>/dev/null | head -n 1 || true)"
+    case "$value" in ''|None|null) continue ;; esac
+    as_user "$user" hermes -p "$name" config set "$key" "$value" >/dev/null 2>&1 || true
+  done
+}
+
+write_voice_unit() {  # $1 = Benutzer
+  local user="$1" home
+  home="$(user_home "$user")"
+  cat > "/etc/systemd/system/$VOICE_UNIT" <<UNIT
+[Unit]
+Description=Sprachdienst für Mission Control (Hermes)
+Documentation=https://github.com/$MC_REPO
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+User=$user
+WorkingDirectory=$home
+Environment=HOME=$home PATH=$home/.local/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=$VOICE_ENV
+ExecStart=$MC_DIR/scripts/sprachdienst-start.sh
+Restart=always
+RestartSec=20
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  systemctl daemon-reload
+}
+
+cmd_voice_on() {
+  local user home key host
+  user="$(agent_user)"
+  home="$(user_home "$user")"
+  [ -x "$home/.local/bin/hermes" ] || die 2 "Hermes ist für $user nicht installiert ($home/.local/bin/hermes fehlt)."
+  [ -f "$MC_DIR/scripts/sprachdienst.py" ] || die 2 "sprachdienst.py fehlt – Mission Control neu installieren."
+  host="$(bridge_ip)"
+  key="$(env_get "$PEERS_ENV" MISSION_CONTROL_VOICE_KEY 2>/dev/null || true)"
+  [ -n "$key" ] || key="$(random_secret)"
+  log "Sprachdienst einschalten ($host:$VOICE_PORT, nur für Mission Control)"
+  [ -f "$VOICE_ENV" ] || install -m 600 /dev/null "$VOICE_ENV"
+  env_set "$VOICE_ENV" SPRACHDIENST_HOST "$host"
+  env_set "$VOICE_ENV" SPRACHDIENST_PORT "$VOICE_PORT"
+  env_set "$VOICE_ENV" SPRACHDIENST_KEY "$key"
+  [ -f "$PEERS_ENV" ] || install -m 600 /dev/null "$PEERS_ENV"
+  env_set "$PEERS_ENV" MISSION_CONTROL_VOICE_URL "http://$host:$VOICE_PORT"
+  env_set "$PEERS_ENV" MISSION_CONTROL_VOICE_KEY "$key"
+  write_voice_unit "$user"
+  systemctl enable "$VOICE_UNIT" >/dev/null 2>&1
+  systemctl restart "$VOICE_UNIT"
+  restart_mission_control
+  log "Fertig: Mikrofon- und Vorlese-Knöpfe erscheinen in Mission Control (das Sprachmodell lädt beim Start kurz)."
+}
+
+cmd_voice_off() {
+  systemctl disable --now "$VOICE_UNIT" >/dev/null 2>&1 || true
+  if [ -f "$PEERS_ENV" ]; then
+    grep -v -E '^MISSION_CONTROL_VOICE_(URL|KEY)=' "$PEERS_ENV" > "$PEERS_ENV.tmp" || true
+    chmod 600 "$PEERS_ENV.tmp" && mv "$PEERS_ENV.tmp" "$PEERS_ENV"
+  fi
+  restart_mission_control
+  log "Sprachdienst ist aus (die Einstellungen von Hermes bleiben)."
+}
+
+cmd_voice_status() {
+  local health="nicht erreichbar"
+  curl -fsS --max-time 3 "http://$(bridge_ip):$VOICE_PORT/health" >/dev/null 2>&1 && health=erreichbar
+  printf '%-12s %-6s %-10s %s\n' DIENST PORT STATUS API
+  printf '%-12s %-6s %-10s %s\n' sprache "$VOICE_PORT" "$(systemctl is-active "$VOICE_UNIT" 2>/dev/null || true)" "$health"
 }
 
 cmd_remove() {
@@ -238,5 +324,10 @@ case "$CMD" in
   add) [ -n "$NAME" ] || die 1 "Name fehlt (z. B. hermes-team.sh add atlas)."; cmd_add "$NAME" ;;
   remove) [ -n "$NAME" ] || die 1 "Name fehlt."; cmd_remove "$NAME" ;;
   list) cmd_list ;;
+  voice)
+    case "$NAME" in
+      on) cmd_voice_on ;; off) cmd_voice_off ;; status|"") cmd_voice_status ;;
+      *) die 1 "voice on|off|status" ;;
+    esac ;;
   *) usage >&2; die 1 "Unbekannter Befehl: $CMD" ;;
 esac

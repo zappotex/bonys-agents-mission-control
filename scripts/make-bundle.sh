@@ -19,10 +19,12 @@ STAGE="$OUT/$NAME"
 mkdir -p "$STAGE/scripts" "$STAGE/share"
 cp "$ROOT/deploy/compose.yaml" "$ROOT/.env.example" "$ROOT/agentpc.json" "$ROOT/LICENSE" "$STAGE/"
 cp "$ROOT/deploy/mission-control.svg" "$STAGE/share/"
-for script in install update uninstall reset-secrets ensure-secrets hermes-team lib; do
+for script in install update uninstall reset-secrets ensure-secrets hermes-team sprachdienst-start lib; do
   cp "$ROOT/scripts/$script.sh" "$STAGE/scripts/"
 done
+cp "$ROOT/scripts/sprachdienst.py" "$STAGE/scripts/"
 chmod 755 "$STAGE"/scripts/*.sh
+chmod 644 "$STAGE"/scripts/*.py
 tar --sort=name --owner=0 --group=0 --numeric-owner --mtime='2026-01-01 00:00Z' \
   -C "$OUT" -czf "$OUT/$NAME.tar.gz" "$NAME"
 rm -rf "$STAGE"
